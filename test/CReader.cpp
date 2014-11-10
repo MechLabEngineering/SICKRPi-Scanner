@@ -344,6 +344,7 @@ void CReader::storeImuData()
 	
 	//imu_get_quaternion(&imu, &x, &y, &z, &w);
 	
+	// get avg of imu data
 	for (int i = 0 ; i < 5 ; i++) {
 		imu_get_quaternion(&imu, &x, &y, &z, &w);
 		x1 += x;
@@ -356,21 +357,16 @@ void CReader::storeImuData()
 	y = y1 / 5;
 	z = z1 / 5;
 	w = w1 / 5;
-
-	octomath::Quaternion q(w,y,z,x);
+	
+	// use octomath to calc quaternion
+	// y, z, x
+	octomath::Quaternion q(w,x,y,z);
 	octomath::Vector3 v(0.0,0.0,0.0);
 	octomath::Pose6D pp(v, q);
 
-	double xang = pp.pitch();
-	xang -= 1.57;
-	double rang = pp.roll();
-	rang += 1.57;
-	double yang = pp.yaw();
-	yang -= 1.57;
-
 	xAngle = pp.roll();
 	yAngle = pp.pitch();
-	zAngle = pp.yaw()  ;
+	zAngle = pp.yaw()*-1; // invert to correct mirroring
 
 	return;
 }
@@ -575,7 +571,8 @@ int CReader::writeDataBT()
 {
 	time_t t;
     struct tm *ts;
-    char buff[80];	
+    char buff[80];
+    uint32_t size = 0;
     
     // build filename 
     t = time(NULL);
@@ -591,8 +588,13 @@ int CReader::writeDataBT()
     {
 		tree->insertPointCloud(*lIter,-1,true,false);
 		std::cout << (100.0*i)/(float)scan_nodes.size() << " %" << std::endl;
+		size += sizeof(*lIter);
 		i++; 
     }
+    
+    std::cout << "Note Count:" << i << std::endl;
+    std::cout.setf(std::ios::fixed);
+    std::cout << "Size in Mem:" << std::setprecision(2) << size << " Byte" << std::endl;
 	
 	// lossless compression of the octree
 	tree->prune();
