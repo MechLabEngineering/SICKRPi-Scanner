@@ -9,7 +9,6 @@
 #include "IbeoLux/src/IbeoLaser/IbeoLaserAbstract.hpp"
 #include "IbeoLux/src/IbeoLaser/IbeoLaserException.hpp"
 #include "IbeoLux/src/IbeoLaser/IbeoLaserScanpoint.hpp"
-#include "IbeoLux/src/Capture/CaptureToCSV.hpp"
 #include "boost/signals2.hpp"
 #include "boost/thread.hpp"
 #include "ip_connection.h"
