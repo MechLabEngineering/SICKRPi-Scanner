@@ -1,7 +1,8 @@
 /*
  * CReader.cpp
- *
- * Created on: 22.09.2014
+ * create octree live
+ * 
+ * Created on: 07.11.2014
  * Author: Markus
 */
 #include <iostream>
@@ -12,6 +13,7 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <math.h>
+#include <list>
 
 #include <octomap/octomap.h>
 #include <octomap/OcTree.h>
@@ -28,6 +30,7 @@ using namespace boost::chrono;
 #define OCTO_RES 	0.05 // in m
 #define PI 3.14159265
 
+#define CONFIG "config.cfg"
 #define HOST "localhost"
 #define PORT 4223
 
@@ -72,11 +75,15 @@ CReader::CReader()
 	scancycles = 0;
 	is_imu_connected = false;
 	
-	octo_res = 0.05;
+	octo_res = OCTO_RES;
 	ip_adress = "192.168.0.1";
 	port = 12002;
 	layers = 1;
 	convergence = 0;
+	
+	// set angle filter
+	angle_max = 0*PI/180; // scanner max 50
+	angle_min = -60*PI/180; // scanner min -60
 	
 	maxmin = false;
 	duration = false;
@@ -86,8 +93,6 @@ CReader::CReader()
 	
 	readConfig();
 	
-	//init();
-	//initSensor();
 	return;
 }
 
@@ -108,36 +113,43 @@ int CReader::readConfig()
 			key = trim(line.substr(0,pos));
 			val = trim(line.substr(pos+1));
 			
-			if (key.compare("resolution") == 0) {
-				//tree->setResolution(::atof(val.c_str()));
-				octo_res = ::atof(val.c_str());
-			} else if (key.compare("ip") == 0) {
-				ip_adress = val;
-			} else if (key.compare("port") == 0) {
-				port = atoi(val.c_str());
-			} else if (key.compare("layers") == 0) {
-				layers = atoi(val.c_str()) - 1;
-			} else if (key.compare("maxmin") == 0) {
-				if (val.compare("true") == 0)
-					maxmin = true;
-				else
-					maxmin = false;
-			} else if (key.compare("writebt") == 0) {
-				if (val.compare("true") == 0)
-					writebt = true;
-			} else if (key.compare("convergence") == 0) {
-				convergence = atoi(val.c_str());
-			} else if (key.compare("location") == 0) {
-				if (val.compare("indoor") == 0) {
-					is_indoor = true;
+			try {				
+				if (key.compare("resolution") == 0) {
+					octo_res = ::atof(val.c_str());
+				} else if (key.compare("ip") == 0) {
+					ip_adress = val;
+				} else if (key.compare("port") == 0) {
+					port = atoi(val.c_str());
+				} else if (key.compare("layers") == 0) {
+					layers = atoi(val.c_str()) - 1;
+				} else if (key.compare("maxmin") == 0) {
+					if (val.compare("true") == 0)
+						maxmin = true;
+					else
+						maxmin = false;
+				} else if (key.compare("writebt") == 0) {
+					if (val.compare("true") == 0)
+						writebt = true;
+				} else if (key.compare("convergence") == 0) {
+					convergence = atoi(val.c_str());
+				} else if (key.compare("location") == 0) {
+					if (val.compare("indoor") == 0) {
+						is_indoor = true;
+					}
+				} else if (key.compare("writecsv") == 0) {
+					if (val.compare("true") == 0) {
+						writecsv = true;
+					}
+				} else if (key.compare("minangle") == 0) {
+					angle_min = atoi(val.c_str())*PI/180.0;
+				} else if (key.compare("maxangle") == 0) {
+					angle_max = atoi(val.c_str())*PI/180.0;
 				}
-			} else if (key.compare("writecsv") == 0) {
-				if (val.compare("true") == 0) {
-					writecsv = true;
-				}
+			
+			} catch (...) {
+				std::cout << "read config error" << std::endl;
 			}
-		} 
-	
+		}	
 		fh.close();
 	}    
 	return 0;
@@ -167,9 +179,6 @@ CReader::~CReader()
 
 void cb_connected(uint8_t connect_reason, void *user_data) 
 {
-    //IPConnection *ipcon_1 = (IPConnection *)user_data;
-    //ipcon = (IPConnection*) user_data;
-    
     // ...then trigger enumerate
     ipcon_enumerate(&ipcon);
 }
@@ -179,11 +188,6 @@ double yaw = 0, pitch = 0, roll = 0;
 
 void cb_angular_velocity(int16_t x, int16_t y, int16_t z, void *user_data)
 {
-	//std::cout << "CB" << std::endl;
-	//std::cout << "x:" << x/15 << std::endl;
-	//std::cout << "y:" << y/15 << std::endl;
-	//std::cout << "z:" << z/15 << std::endl;
-	
 	if (abs(x) > 3 || abs(y) || abs(z)) {
 		imu_set_convergence_speed(&imu, 30);
 	} else {
@@ -240,19 +244,18 @@ int CReader::init()
 {
 	tree = new OcTree (octo_res);	
 	
-	bb_x_max = 50.0;
+	// set bounding box filter
+	bb_x_max = 70.0;
 	bb_x_min = 0.0;
 	bb_y_max = 200.0;
 	bb_y_min = -200.0;
 	
-	angle_max = 0*PI/180; // scanner max 50
-	angle_min = -60*PI/180; // scanner min -60
-	
+	// activate both filter
 	filter_angle = true;
 	filter_bbox = true;
 	
 	// init tinkerforge ------------------------------------------------	
-	// Create IP Connection
+	// create IP connection
 
     ipcon_create(&ipcon);
 
@@ -282,6 +285,7 @@ int CReader::init()
 		return false;
 	}
 	
+	// set convergence after initial stage
 	imu_set_convergence_speed(&imu,convergence);
 
 	usleep(50000);
@@ -326,7 +330,6 @@ int CReader::initSensor()
 		return false;
 
 	laserscanner->ibeoLaserDataAvailable.connect(boost::bind(&CReader::newLaserData, this, _1));
-	//laserscanner->imuData.connect(boost::bind(&CReader::storeImuData, this));
 
 	return true;
 }
@@ -338,6 +341,7 @@ void CReader::storeImuData()
 	
 	//imu_get_quaternion(&imu, &x, &y, &z, &w);
 	
+	// get avg of imu data
 	for (int i = 0 ; i < 5 ; i++) {
 		imu_get_quaternion(&imu, &x, &y, &z, &w);
 		x1 += x;
@@ -350,64 +354,21 @@ void CReader::storeImuData()
 	y = y1 / 5;
 	z = z1 / 5;
 	w = w1 / 5;
-/*
-	// euler winkel
-	xAngle  =  atan2(2*x*y + 2*w*z, w*w + x*x - y*y - z*z);
-	yAngle	= -asin(2*w*y - 2*x*z);
-	zAngle  = -atan2(2*y*z + 2*w*x, -w*w + x*x + y*y - z*z);
-*/
-
-/*	
-	xAngle = atan2(2*y*w - 2*x*z, 1 - 2*y*y - 2*z*z);
-	zAngle = atan2(2*x*w - 2*y*z, 1 - 2*x*x - 2*z*z);
-	yAngle =  asin(2*x*y + 2*z*w);
-	return;
-*/
-	//std::cout << "++++++++++++++++++" << std::endl;
-	//std::cout << xAngle << "::" << yAngle << "::" << zAngle << std::endl;
-	//std::cout << xAngle*180/PI << "::" << yAngle*180/PI << "::" << zAngle*180/PI << std::endl;	
-/*	
-	int16_t ret_roll, ret_pitch, ret_yaw;
-	imu_get_orientation(&imu, &ret_roll, &ret_pitch, &ret_yaw);
-*/	//y z x
-	octomath::Quaternion q(w,y,z,x);
-	//octomath::Quaternion q(xAngle,yAngle,zAngle);
+	
+	// use octomath to calc quaternion
+	// y, z, x
+	octomath::Quaternion q(w,x,y,z);
 	octomath::Vector3 v(0.0,0.0,0.0);
-	//octomath::Vector3 vv;
-	//vv = q.toEuler();
 	octomath::Pose6D pp(v, q);
 
-	double xang = pp.pitch();
-	xang -= 1.57;
-	double rang = pp.roll();
-	rang += 1.57;
-	double yang = pp.yaw();
-	yang -= 1.57;
-/* --------------------------------------
-	if (xang  < -180)
-		xang = -180 - xang;
-	yAngle = xang*PI/180.0;
-*/ 
 	xAngle = pp.roll();
 	yAngle = pp.pitch();
-	zAngle = pp.yaw()  ;
-	//std::cout << xAngle << "::" << yAngle << "::" << zAngle << std::endl;
-	//* (90*PI/180.0)
-	//std::cout << "---------------------" << std::endl;
-	//std::cout << roll << "::" << pitch << "::" << yaw  << std::endl;
-	//std::cout << (roll*180.0)/PI << "::" << (pitch*180)/PI << "::" << (yaw*180)/PI << std::endl;
-	//std::cout << ret_roll << "::" << ret_pitch << "::" << ret_yaw << std::endl;	
-	//std::cout << xAngle << "::" << yAngle << "::" << zAngle << std::endl;	
-	//std::cout << pp.roll() << "::" << pp.pitch() << "::" << pp.yaw() << std::endl;
-	//std::cout << pp.roll()*180/PI << "::" << pp.pitch()*180/PI << "::" << pp.yaw()*180/PI << std::endl;	
-	//std::cout << vv.roll() << "::" << vv.pitch() << "::" << vv.yaw() << std::endl;
-	//std::cout << "###################" << std::endl;
+	zAngle = pp.yaw()*-1; // invert to correct mirroring
+
 	return;
 }
 
 float xmax  = 0.0, xmin  = 0.0, ymax  = 0.0, ymin = 0.0, zmax = 0.0, zmin = 0.0;
-
-//capture::CaptureToCSV logdatei("measure2.csv","|");
 
 void CReader::writeToCSV(ibeo::IbeoLaserScanpoint *scanPt)
 {
@@ -432,14 +393,9 @@ void CReader::writeToCSV(ibeo::IbeoLaserScanpoint *scanPt)
 			file << "Zeitstempel|Ebene|Echo|Winkel|Radius|Xwert|Ywert|EchoPulsBreite|Scanflags" << std::endl;
 	}
 	
-	//ibeo::IbeoLaserDataAbstract *val = dat->get();	
-	//logdatei << dynamic_cast<ibeo::IbeoLaserDataAbstract*>(dat);
-	//logdatei << *((ibeo::IbeoLaserDataAbstract*)(&dat));
-	
 	if (!file.is_open())
 		return;
 	
-	//u_int_64_t ts = laserscanner->getTimeStamp();
 	std::time_t ts = std::time(0);		
 
 	file << ts;
@@ -473,20 +429,10 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 	pcloud = new Pointcloud();	
 	thread_clock::time_point start = thread_clock::now();
 	
-	//static int check = true;
+	//thread_clock::time_point cb_stop = thread_clock::now();  
+	//std::cout << "duration: " << duration_cast<milliseconds>(cb_stop - cb_start).count() << " ms\n";
 	
-	/*
-	if (check == true)
-		check = false;
-	else {
-		check = true;
-		return;
-	}
-	*/
-
-	thread_clock::time_point cb_stop = thread_clock::now();  
-	std::cout << "duration: " << duration_cast<milliseconds>(cb_stop - cb_start).count() << " ms\n";
-	
+	// check octree
 	if (tree == NULL || pcloud == NULL)
 		return;
 
@@ -497,14 +443,10 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 	//ibeo::IbeoLaserScanpoint center(0,0,0,0.0,0.0,0.0,0.0,0.0,0,NULL);
 	//writeLaserData(TRUE, &center);
 
-	/*
-	if (data_av == 1) {
-		mtx_da.unlock();
-		return;		
-	}
-	* */
+	// clear point stream string
 	point_stream.str(std::string());
 
+	// get IMU data
 	storeImuData();
 
 	//scanPt->CaptureToCSV("measure.csv","|");
@@ -514,9 +456,11 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 		
 		scanPt = dat->getScanPointAt(i);
 		
+		/*
 		if (i==0) {
 			std::cout << ((int)std::abs(scanPt->getHorizontalAngle()*10000))+(scanPt->getRadialDistance()) << std::endl;
 		}
+		*/
 
 		//writeLaserData(FALSE, scanPt);
 		//point_stream.setf(std::ios::fixed);
@@ -529,13 +473,13 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 		//point3d p3 (x,y,z);
 
 		//p3 = p3.rotate_IP(90,90,0);
-		
+		//std::cout << scanPt->getHorizontalAngle() << "::" << angle_min << "::" << angle_max << std::endl;
 		// check if point inside the bb
 		if ((filter_bbox && x <= bb_x_max && x >= bb_x_min &&
 			y <= bb_y_max && y >= bb_y_min) &&
 			(filter_angle && scanPt->getHorizontalAngle() > angle_min &&
 			scanPt->getHorizontalAngle() < angle_max)) {
-				 
+			 
 			 if (static_cast<int>(scanPt->getLayer()) <= layers) {
 				// add point to cloud
 				pcloud->push_back(x,y,z);
@@ -571,11 +515,6 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 	
 	tree->insertPointCloud(*snode,-1,true,false);
 	
-	// lossless compression of the octree
-	tree->prune();
-
-	//tree->insertScan(*snode);
-	
 	mtx_da.unlock();
 	
 	// calc delay
@@ -586,7 +525,7 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 	}
 	
 	// clean up
-	delete pcloud;
+	//delete pcloud;
 	
 	cb_start = thread_clock::now();
 
@@ -614,16 +553,19 @@ int CReader::writeDataBT()
 {
 	time_t t;
     struct tm *ts;
-    char buff[80];	
+    char buff[80];
     
     // build filename 
     t = time(NULL);
     ts = localtime(&t);
     
     strftime(buff, 80, "tree_%Y_%m_%d-%H_%M_%S.bt", ts);
-
-	//tree->writeBinary(fn.str().c_str());
+    
 	tree->updateInnerOccupancy();
+	
+	// lossless compression of the octree
+	tree->prune();	
+	
 	tree->writeBinary(buff);
 	
 	if (maxmin) {
