@@ -584,8 +584,6 @@ int CReader::writeDataBT()
 	
 	ss << bt_path << buff;
 	
-	std::cout << ss.str() << std::endl;
-	
 	tree->writeBinary(ss.str());
 	
 	if (maxmin) {
