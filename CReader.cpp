@@ -67,6 +67,13 @@ const std::string trim( const std::string& s)
 	}
 }
 
+void debugMessage(int level, string message)
+{
+	if (level >= DEBUG)
+		std::cerr << message << std::endl;
+	return;
+}
+
 // constructor
 CReader::CReader()
 {
@@ -107,7 +114,9 @@ int CReader::readConfig()
 	fh.open("config.cfg", std::ios::in);
 	
 	if (fh.is_open()) {
-	
+		
+		debugMessage(2, "read config...");
+		
 		while (getline(fh,line)) {			
 			pos = line.find("=");
 			key = trim(line.substr(0,pos));
