@@ -7,30 +7,42 @@ import time
 
 HOST = "localhost"
 PORT = 4223
-UID = "xyz" # Change to your UID
+UID = "7xwQ9g" # Change to your UID
 run = True
+is_scan = False
 
 from tinkerforge.ip_connection import IPConnection
 from tinkerforge.bricklet_industrial_digital_in_4 import IndustrialDigitalIn4
 
 #mount stick
-subprocess.call(["sudo mount" , "/dev/sda1 /media/usb -o uid=pi,gid=pi"])
+#subprocess.call(["sudo mount" , "/dev/sda1 /media/usb -o uid=pi,gid=pi"])
 
 def call_laser():
-	subprocess.call("./main", shell=True)
+	ret = subprocess.call("./main", shell=True)
+	
+	if ret == 1:
+		global is_scan
+		is_scan = False
 
 # Callback function for interrupts
 def cb_interrupt(interrupt_mask, value_mask):
-	print('Interrupt by: ' + str(bin(interrupt_mask)))
-	print('Value: ' + str(bin(value_mask)))
+	#print('Interrupt by: ' + str(bin(interrupt_mask)))
+	#print('Value: ' + str(bin(value_mask)))
+	global is_scan
     
 	# check start interrupt
-	if interrupt_mask & 0x01:
-		# start laser thred
-		start_new_thread(call_laser,())
-	elif interrupt_mask & 0x02:
-		execfile("quit.py")
-	elif interrupt_mask & 0x03:
+	if interrupt_mask & 0x01 and value_mask & 0x01:
+		if is_scan == False:
+			print "start scan"
+			is_scan = True
+			# start laser thred
+			start_new_thread(call_laser,())
+	elif interrupt_mask & 0x02 and value_mask & 0x02:
+		if is_scan:
+			print "stop scan"
+			execfile("quit.py")
+			is_scan = False
+	elif interrupt_mask & 0x03 and value_mask & 0x03:
 		subprocess.call(["shutdown" , "-h now"])
 
 ipcon = IPConnection() # Create IP connection
@@ -52,6 +64,10 @@ except:
 	exit()
 
 while run:
-	time.sleep(0.5)
+	try:
+		time.sleep(0.05)
+	except:
+		print "Quit"
+		run = False
 	
 ipcon.disconnect()
