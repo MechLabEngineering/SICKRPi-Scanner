@@ -28,7 +28,7 @@ int main (int argv, char ** argc)
 	
 	try {
 		if (!reader->init()) {
-			exit(0);
+			exit(1);
 		}
 	}
 	catch (...) {
