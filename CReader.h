@@ -11,8 +11,6 @@
 #include "IbeoLux/src/IbeoLaser/IbeoLaserScanpoint.hpp"
 #include "boost/signals2.hpp"
 #include "boost/thread.hpp"
-#include "ip_connection.h"
-#include "brick_imu.h"
 
 #include <octomap/octomap.h>
 #include <octomap/OcTree.h>
@@ -73,6 +71,7 @@ class CReader
 		int writecsv;
 		int convergence;
 		int is_indoor;
+		string bt_path;
 
 	private:
 		int initSensor();
