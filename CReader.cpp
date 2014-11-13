@@ -90,6 +90,7 @@ CReader::CReader()
 	writebt = false;
 	writecsv = false;
 	is_indoor = false;
+	bt_path = "";
 	
 	readConfig();
 	
@@ -130,6 +131,8 @@ int CReader::readConfig()
 				} else if (key.compare("writebt") == 0) {
 					if (val.compare("true") == 0)
 						writebt = true;
+				} else if (key.compare("btpath") == 0) {
+					bt_path = val;				
 				} else if (key.compare("convergence") == 0) {
 					convergence = atoi(val.c_str());
 				} else if (key.compare("location") == 0) {
@@ -553,7 +556,11 @@ int CReader::writeDataBT()
 {
 	time_t t;
     struct tm *ts;
-    char buff[80];
+    char buff[128];
+    std::stringstream ss;
+    
+    if (!writebt)
+		return 0;
     
     // build filename 
     t = time(NULL);
@@ -566,7 +573,11 @@ int CReader::writeDataBT()
 	// lossless compression of the octree
 	tree->prune();	
 	
-	tree->writeBinary(buff);
+	ss << bt_path << buff;
+	
+	std::cout << ss.str() << std::endl;
+	
+	tree->writeBinary(ss.str());
 	
 	if (maxmin) {
 		std::cout << "----------------------------" << std::endl;
