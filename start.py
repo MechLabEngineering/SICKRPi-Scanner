@@ -21,7 +21,7 @@ from tinkerforge.bricklet_industrial_digital_in_4 import IndustrialDigitalIn4
 
 # thread: start laserscan
 def call_laser():
-	ret = subprocess.call("./main", shell=True)
+	ret = subprocess.call("/home/pi/SICKRPi-Scanner/main", shell=True)
 	
 	if ret == 1:
 		global is_scan
@@ -42,7 +42,7 @@ def cb_interrupt(interrupt_mask, value_mask):
 	elif interrupt_mask & 0x02 and value_mask & 0x02:
 		if is_scan:
 			print "stop scan"
-			execfile("quit.py")
+			execfile("/home/pi/SICKRPi-Scanner/quit.py")
 			is_scan = False
 	# check shutdown interrupt
 	elif interrupt_mask & 0x03 and value_mask & 0x03:
