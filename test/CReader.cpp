@@ -30,7 +30,7 @@ using namespace boost::chrono;
 #define OCTO_RES 	0.05 // in m
 #define PI 3.14159265
 
-#define CONFIG "config.cfg"
+#define CONFIG "/media/usb0/config.cfg"
 #define HOST "localhost"
 #define PORT 4223
 
@@ -106,7 +106,7 @@ int CReader::readConfig()
 	size_t pos = 0;
 	std::string key, val;
 	
-	fh.open("config.cfg", std::ios::in);
+	fh.open(CONFIG, std::ios::in);
 	
 	if (fh.is_open()) {
 	
@@ -133,6 +133,8 @@ int CReader::readConfig()
 				} else if (key.compare("writebt") == 0) {
 					if (val.compare("true") == 0)
 						writebt = true;
+				} else if (key.compare("btpath") == 0) {
+					bt_path = val;				
 				} else if (key.compare("convergence") == 0) {
 					convergence = atoi(val.c_str());
 				} else if (key.compare("location") == 0) {
@@ -572,6 +574,7 @@ int CReader::writeDataBT()
 	time_t t;
     struct tm *ts;
     char buff[80];
+    std::stringstream ss;
     uint32_t size = 0;
     
     // build filename 
@@ -602,7 +605,9 @@ int CReader::writeDataBT()
 
 	//tree->writeBinary(fn.str().c_str());
 	tree->updateInnerOccupancy();
-	tree->writeBinary(buff);
+	ss << bt_path << buff;
+	
+	tree->writeBinary(ss.str());
 	
 	if (maxmin) {
 		std::cout << "----------------------------" << std::endl;
