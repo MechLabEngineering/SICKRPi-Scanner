@@ -136,9 +136,9 @@ while run:
 	except:
 		print "stop main loop"
 		run = False
-db.set_selected_led_state(DualButton.LED_RIGHT,DualButton.LED_STATE_ON)
+
 time.sleep(0.5)	
 if ipcon != None:
-	
+	db.set_led_state(DualButton.LED_STATE_OFF,DualButton.LED_STATE_OFF)
 	ipcon.disconnect()
 print "Quit"
