@@ -1,0 +1,13 @@
+resolution = resolution of the cubes in octomap (default:0.05)
+ip = ip address of the laser scanner (192.168.0.1)
+port = port to laser scanner (12002)
+layers = number of layers for the measurement (1-4)
+location = not used (default:indoor)
+maxmin = show max/min distance points (true/false)
+duration = measure duration of adding scanpoint to octree (true/false)
+writebt = write bt file after scan is finished (true/false)
+btpath = path for the bt output file
+writecsv = write a csv file with measurement data (true/false)
+convergence = convergence speed of the imu (0 - >500)
+minangle = min angle of scanning view (min:-60)
+maxangle = max angle of scanning view (max:50)
