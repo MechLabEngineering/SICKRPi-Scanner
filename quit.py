@@ -11,12 +11,14 @@ sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 try:
 	sock.connect(addr)
 	print "connected"
+
+	msg = "QUIT"
+	sock.sendall(msg)		
+		
+	sock.close()
 except socket.error, msg:
 	sock = 0
 	print "not connected"
-	exit(0)
+	#exit(0)
 
-msg = "QUIT"
-sock.sendall(msg)		
-		
-sock.close()
+
