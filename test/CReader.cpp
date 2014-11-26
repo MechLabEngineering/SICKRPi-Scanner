@@ -69,6 +69,13 @@ const std::string trim( const std::string& s)
 	}
 }
 
+void debugMessage(int level, string message)
+{
+	if (level >= DEBUG)
+		std::cerr << message << std::endl;
+	return;
+}
+
 // constructor
 CReader::CReader()
 {
@@ -93,7 +100,10 @@ CReader::CReader()
 	writecsv = false;
 	is_indoor = false;
 	
-	readConfig();
+	if (readConfig())
+		debugMessage(2,"config successfully readed!");
+	else
+		debugMessage(2, "no config file!");
 	
 	return;
 }
@@ -108,56 +118,63 @@ int CReader::readConfig()
 	
 	fh.open(CONFIG, std::ios::in);
 	
-	if (fh.is_open()) {
-	
-		while (getline(fh,line)) {			
-			pos = line.find("=");
-			key = trim(line.substr(0,pos));
-			val = trim(line.substr(pos+1));
-			
-			try {				
-				if (key.compare("resolution") == 0) {
-					//tree->setResolution(::atof(val.c_str()));
-					octo_res = ::atof(val.c_str());
-				} else if (key.compare("ip") == 0) {
-					ip_adress = val;
-				} else if (key.compare("port") == 0) {
-					port = atoi(val.c_str());
-				} else if (key.compare("layers") == 0) {
-					layers = atoi(val.c_str()) - 1;
-				} else if (key.compare("maxmin") == 0) {
-					if (val.compare("true") == 0)
-						maxmin = true;
-					else
-						maxmin = false;
-				} else if (key.compare("writebt") == 0) {
-					if (val.compare("true") == 0)
-						writebt = true;
-				} else if (key.compare("btpath") == 0) {
-					bt_path = val;				
-				} else if (key.compare("convergence") == 0) {
-					convergence = atoi(val.c_str());
-				} else if (key.compare("location") == 0) {
-					if (val.compare("indoor") == 0) {
-						is_indoor = true;
-					}
-				} else if (key.compare("writecsv") == 0) {
-					if (val.compare("true") == 0) {
-						writecsv = true;
-					}
-				} else if (key.compare("minangle") == 0) {
-					angle_min = atoi(val.c_str())*PI/180.0;
-				} else if (key.compare("maxangle") == 0) {
-					angle_max = atoi(val.c_str())*PI/180.0;
-				}
-			
-			} catch (...) {
-				std::cout << "read config error" << std::endl;
-			}
+	if (!fh.is_open()) {
+		fh.open("config.cfg", std::ios::in);
+		if (!fh.is_open()) {
+			return FALSE;
 		}	
-		fh.close();
-	}    
-	return 0;
+	}
+		
+	debugMessage(2, "read config...");
+		
+	while (getline(fh,line)) {			
+		pos = line.find("=");
+		key = trim(line.substr(0,pos));
+		val = trim(line.substr(pos+1));
+		
+		try {				
+			if (key.compare("resolution") == 0) {
+				octo_res = ::atof(val.c_str());
+			} else if (key.compare("ip") == 0) {
+				ip_adress = val;
+			} else if (key.compare("port") == 0) {
+				port = atoi(val.c_str());
+			} else if (key.compare("layers") == 0) {
+				layers = atoi(val.c_str()) - 1;
+			} else if (key.compare("maxmin") == 0) {
+				if (val.compare("true") == 0)
+					maxmin = true;
+				else
+					maxmin = false;
+			} else if (key.compare("writebt") == 0) {
+				if (val.compare("true") == 0)
+					writebt = true;
+			} else if (key.compare("btpath") == 0) {
+				bt_path = val;				
+			} else if (key.compare("convergence") == 0) {
+				convergence = atoi(val.c_str());
+			} else if (key.compare("location") == 0) {
+				if (val.compare("indoor") == 0) {
+					is_indoor = true;
+				}
+			} else if (key.compare("writecsv") == 0) {
+				if (val.compare("true") == 0) {
+					writecsv = true;
+				}
+			} else if (key.compare("minangle") == 0) {
+				angle_min = atoi(val.c_str())*PI/180.0;
+			} else if (key.compare("maxangle") == 0) {
+				angle_max = atoi(val.c_str())*PI/180.0;
+			}
+		
+		} catch (...) {
+			std::cout << "unkown parameter:" << key << std::endl;
+		}
+	}	
+	
+	fh.close();
+   
+	return TRUE;
 }
 
 CReader::~CReader()
@@ -375,12 +392,11 @@ void CReader::storeImuData()
 
 float xmax  = 0.0, xmin  = 0.0, ymax  = 0.0, ymin = 0.0, zmax = 0.0, zmin = 0.0;
 
-//capture::CaptureToCSV logdatei("measure2.csv","|");
-
 void CReader::writeToCSV(ibeo::IbeoLaserScanpoint *scanPt)
 {
 	static int state = 0;
 	std::string separator = "|";
+	std::stringstream ss;
 	
 	if (state == 0) {
 
@@ -394,20 +410,17 @@ void CReader::writeToCSV(ibeo::IbeoLaserScanpoint *scanPt)
     
 		strftime(buff, 80, "measure_%Y_%m_%d-%H_%M_%S.csv", ts);		
 		
-		file.open(buff, std::ios::out);	
+		ss << bt_path << buff;	
+		
+		file.open(ss.str().c_str(), std::ios::out);	
 		state = 1;
 		if (file.is_open())
 			file << "Zeitstempel|Ebene|Echo|Winkel|Radius|Xwert|Ywert|EchoPulsBreite|Scanflags" << std::endl;
 	}
 	
-	//ibeo::IbeoLaserDataAbstract *val = dat->get();	
-	//logdatei << dynamic_cast<ibeo::IbeoLaserDataAbstract*>(dat);
-	//logdatei << *((ibeo::IbeoLaserDataAbstract*)(&dat));
-	
 	if (!file.is_open())
 		return;
 	
-	//u_int_64_t ts = laserscanner->getTimeStamp();
 	std::time_t ts = std::time(0);		
 
 	file << ts;
@@ -482,10 +495,6 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 		y = (float)scanPt->getYValue();
 		z = (float)scanPt->getZValue();
 	
-		//point3d p3 (x,y,z);
-
-		//p3 = p3.rotate_IP(90,90,0);
-		//std::cout << scanPt->getHorizontalAngle() << "::" << angle_min << "::" << angle_max << std::endl;
 		// check if point inside the bb
 		if ((filter_bbox && x <= bb_x_max && x >= bb_x_min &&
 			y <= bb_y_max && y >= bb_y_min) &&
@@ -525,15 +534,7 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 
 	snode = new ScanNode(pcloud,pose,1);
 	
-	//poses.push_back(pose);
 	scan_nodes.push_back(*snode);
-	
-	//tree->insertPointCloud(*snode,-1,true,false);
-	
-	// lossless compression of the octree
-	//tree->prune();
-
-	//tree->insertScan(*snode);
 	
 	mtx_da.unlock();
 	
@@ -543,9 +544,6 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 		
 		std::cout << "duration: " << duration_cast<milliseconds>(stop - start).count() << " ms\n";
 	}
-	
-	// clean up
-	//delete pcloud;
 	
 	cb_start = thread_clock::now();
 
@@ -602,8 +600,6 @@ int CReader::writeDataBT()
 	// lossless compression of the octree
 	tree->prune();
     
-
-	//tree->writeBinary(fn.str().c_str());
 	tree->updateInnerOccupancy();
 	ss << bt_path << buff;
 	
