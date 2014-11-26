@@ -30,7 +30,7 @@ using namespace boost::chrono;
 #define OCTO_RES 	0.05 // in m
 #define PI 3.14159265
 
-#define CONFIG "config.cfg"
+#define CONFIG "/media/usb0/config.cfg"
 #define HOST "localhost"
 #define PORT 4223
 
@@ -99,7 +99,10 @@ CReader::CReader()
 	is_indoor = false;
 	bt_path = "";
 	
-	readConfig();
+	if (readConfig())
+		debugMessage(2,"config successfully readed!");
+	else
+		debugMessage(2, "no config file!");
 	
 	return;
 }
@@ -112,59 +115,65 @@ int CReader::readConfig()
 	size_t pos = 0;
 	std::string key, val;
 	
-	fh.open("config.cfg", std::ios::in);
+	fh.open(CONFIG, std::ios::in);
 	
-	if (fh.is_open()) {
-		
-		debugMessage(2, "read config...");
-		
-		while (getline(fh,line)) {			
-			pos = line.find("=");
-			key = trim(line.substr(0,pos));
-			val = trim(line.substr(pos+1));
-			
-			try {				
-				if (key.compare("resolution") == 0) {
-					octo_res = ::atof(val.c_str());
-				} else if (key.compare("ip") == 0) {
-					ip_adress = val;
-				} else if (key.compare("port") == 0) {
-					port = atoi(val.c_str());
-				} else if (key.compare("layers") == 0) {
-					layers = atoi(val.c_str()) - 1;
-				} else if (key.compare("maxmin") == 0) {
-					if (val.compare("true") == 0)
-						maxmin = true;
-					else
-						maxmin = false;
-				} else if (key.compare("writebt") == 0) {
-					if (val.compare("true") == 0)
-						writebt = true;
-				} else if (key.compare("btpath") == 0) {
-					bt_path = val;				
-				} else if (key.compare("convergence") == 0) {
-					convergence = atoi(val.c_str());
-				} else if (key.compare("location") == 0) {
-					if (val.compare("indoor") == 0) {
-						is_indoor = true;
-					}
-				} else if (key.compare("writecsv") == 0) {
-					if (val.compare("true") == 0) {
-						writecsv = true;
-					}
-				} else if (key.compare("minangle") == 0) {
-					angle_min = atoi(val.c_str())*PI/180.0;
-				} else if (key.compare("maxangle") == 0) {
-					angle_max = atoi(val.c_str())*PI/180.0;
-				}
-			
-			} catch (...) {
-				std::cout << "read config error" << std::endl;
-			}
+	if (!fh.is_open()) {
+		fh.open("config.cfg", std::ios::in);
+		if (!fh.is_open()) {
+			return FALSE;
 		}	
-		fh.close();
-	}    
-	return 0;
+	}
+		
+	debugMessage(2, "read config...");
+		
+	while (getline(fh,line)) {			
+		pos = line.find("=");
+		key = trim(line.substr(0,pos));
+		val = trim(line.substr(pos+1));
+		
+		try {				
+			if (key.compare("resolution") == 0) {
+				octo_res = ::atof(val.c_str());
+			} else if (key.compare("ip") == 0) {
+				ip_adress = val;
+			} else if (key.compare("port") == 0) {
+				port = atoi(val.c_str());
+			} else if (key.compare("layers") == 0) {
+				layers = atoi(val.c_str()) - 1;
+			} else if (key.compare("maxmin") == 0) {
+				if (val.compare("true") == 0)
+					maxmin = true;
+				else
+					maxmin = false;
+			} else if (key.compare("writebt") == 0) {
+				if (val.compare("true") == 0)
+					writebt = true;
+			} else if (key.compare("btpath") == 0) {
+				bt_path = val;				
+			} else if (key.compare("convergence") == 0) {
+				convergence = atoi(val.c_str());
+			} else if (key.compare("location") == 0) {
+				if (val.compare("indoor") == 0) {
+					is_indoor = true;
+				}
+			} else if (key.compare("writecsv") == 0) {
+				if (val.compare("true") == 0) {
+					writecsv = true;
+				}
+			} else if (key.compare("minangle") == 0) {
+				angle_min = atoi(val.c_str())*PI/180.0;
+			} else if (key.compare("maxangle") == 0) {
+				angle_max = atoi(val.c_str())*PI/180.0;
+			}
+		
+		} catch (...) {
+			std::cout << "unkown parameter:" << key << std::endl;
+		}
+	}	
+	
+	fh.close();
+   
+	return TRUE;
 }
 
 CReader::~CReader()
@@ -386,6 +395,7 @@ void CReader::writeToCSV(ibeo::IbeoLaserScanpoint *scanPt)
 {
 	static int state = 0;
 	std::string separator = "|";
+	std::stringstream ss;
 	
 	if (state == 0) {
 
@@ -397,9 +407,11 @@ void CReader::writeToCSV(ibeo::IbeoLaserScanpoint *scanPt)
 		t = time(NULL);
 		ts = localtime(&t);
     
-		strftime(buff, 80, "measure_%Y_%m_%d-%H_%M_%S.csv", ts);		
+		strftime(buff, 80, "measure_%Y_%m_%d-%H_%M_%S.csv", ts);
 		
-		file.open(buff, std::ios::out);	
+		ss << bt_path << buff;	
+		
+		file.open(ss.str().c_str(), std::ios::out);	
 		state = 1;
 		if (file.is_open())
 			file << "Zeitstempel|Ebene|Echo|Winkel|Radius|Xwert|Ywert|EchoPulsBreite|Scanflags" << std::endl;
