@@ -44,8 +44,11 @@ class CReader
 		float octo_res;
 		int layers;
 		ibeo::IbeoLaserAbstract *laserscanner;
+		boost::thread *tworker;
 
 		int64_t scancycles;
+		int state;
+		int skip_counter;
 
 		OcTree *tree;
 		Pointcloud *pcloud;
@@ -64,6 +67,7 @@ class CReader
 		float filter_angle;
 		float filter_bbox;
 		
+	// config parameter
 	private:
 		int maxmin;
 		int duration;
@@ -83,7 +87,7 @@ class CReader
 		void releaseSensor();
 		void storeImuData();
 		void newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat);
-		
+		void octoWorker();
 };
 
 #endif
