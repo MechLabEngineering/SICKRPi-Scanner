@@ -35,6 +35,12 @@ using namespace boost::chrono;
 #define PORT 4223
 
 #define DEBUG 1
+#define THREAD_STOP 0
+#define THREAD_RUN  1
+
+#define MAX_SCAN_NODES 30
+#define SKIP_MAX 10
+#define SKIP_MIN 0
 
 boost::mutex mtx_ypr;
 boost::mutex mtx_da;
@@ -88,6 +94,7 @@ CReader::CReader()
 	layers = 1;
 	convergence = 0;
 	state = 0;
+	skip_counter = 0;
 	
 	// set angle filter
 	angle_max = 0*PI/180; // scanner max 50
@@ -313,7 +320,7 @@ int CReader::init()
 	usleep(50000);
 	
 	// start octo worker thread
-	state = 1;
+	state = THREAD_RUN;
 	boost::function<void()> f = boost::bind( &CReader::octoWorker, this );
 	tworker = new boost::thread(f);
 	
@@ -456,7 +463,7 @@ void CReader::octoWorker()
 	thread_clock::time_point cb_start; 
 	
 	// work as long as necessary	
-	while (state == 1) {
+	while (state == THREAD_RUN) {
 		// check if scan data available
 		if (scan_nodes.size() > 0) {
 			cb_start = thread_clock::now(); 
@@ -484,15 +491,13 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 	std::cout << "Callback: call" << std::endl;
 	
 	int sp_count = 0;
+	static int sc = 0;
 	float x, y, z;
 	unsigned int scanpoints = dat->getNumberOfScanpoints();
 	ibeo::IbeoLaserScanpoint *scanPt;
 	ScanNode *snode = NULL;
 	pcloud = new Pointcloud();	
 	thread_clock::time_point start = thread_clock::now();
-	
-	//thread_clock::time_point cb_stop = thread_clock::now();  
-	//std::cout << "duration: " << duration_cast<milliseconds>(cb_stop - cb_start).count() << " ms\n";
 	
 	// check octree
 	if (tree == NULL || pcloud == NULL || state == 0)
@@ -577,7 +582,21 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 	
 	//tree->insertPointCloud(*snode,-1,true,false);
 	mtx_da.lock();
-	scan_nodes.push_back(*snode);
+	
+	if (scan_nodes.size() > MAX_SCAN_NODES) {
+		if ((skip_counter = skip_counter-1) < SKIP_MIN)
+			skip_counter = SKIP_MIN;
+	}
+	else if (scan_nodes.size() < MAX_SCAN_NODES) {
+		if ((skip_counter = skip_counter+1) > SKIP_MAX)
+			skip_counter = SKIP_MAX;
+	}
+	
+	if (sc == skip_counter) {
+		scan_nodes.push_back(*snode);
+		sc = 0;
+	} else
+		sc++;
 	
 	mtx_da.unlock();
 	
@@ -630,9 +649,9 @@ int CReader::writeDataBT()
     strftime(buff, 80, "tree_%Y_%m_%d-%H_%M_%S.bt", ts);
     
     // stop worker thread
-    state = 0;
+    state = THREAD_STOP;
     tworker->join();
-    std::cout << "jj" << std::endl;
+
 	tree->updateInnerOccupancy();
 	
 	// lossless compression of the octree
@@ -680,6 +699,7 @@ void CReader::releaseSensor()
 	// clean up
 	tree->clear();
 	tree = NULL;
+	scan_nodes.clear();
 
 	return;
 }
