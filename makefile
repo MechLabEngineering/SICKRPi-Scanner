@@ -1,4 +1,4 @@
-SPATH = /home/markus/Programme/libs/
+SPATH = /home/pi/
 
 #quelldateien
 SOURCES_IBEO =  main.cpp \
