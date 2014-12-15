@@ -18,8 +18,8 @@ from tinkerforge.bricklet_dual_button import DualButton
 class LRF:
 	HOST = "localhost"
 	PORT = 4223
-	#PROG_PATH = "/home/pi/SICKRPi-Scanner/"
-	PROG_PATH = "/home/gus484/Programme/octomap_ibeo/"	
+	PROG_PATH = "/home/pi/SICKRPi-Scanner/"
+	#PROG_PATH = "/home/gus484/Programme/octomap_ibeo/"	
 	TIMER_MS = 1.0
 
 	def __init__(self):
@@ -62,7 +62,7 @@ class LRF:
 	# thread: start laserscan
 	def call_laser(self):
 		# nicht blockierend
-		self.pro = subprocess.Popen(LRF.PROG_PATH+"main",  shell=False, preexec_fn=os.setsid) 
+		self.pro = subprocess.Popen(LRF.PROG_PATH+"bin/main",  shell=False, preexec_fn=os.setsid) 
 
 	# callback handles device connections and configures possibly lost 
 	# configuration of lcd and temperature callbacks, backlight etc.
@@ -153,7 +153,6 @@ def get_ip_address(ifname):
     )[20:24])
 
 ################################################################################
-'''
 # push ip address
 try:
 	ipaddr = get_ip_address('wlan0')
@@ -162,7 +161,6 @@ try:
 except:
 	print "couldn't public ip address"
 
-'''
 ################################################################################
 
 if __name__ == "__main__":
