@@ -1,8 +1,9 @@
 SPATH = /home/pi/
+BUILD = bin
 
 #quelldateien
 SOURCES_IBEO =  main.cpp \
-		CReader.cpp \
+		CReader_bin.cpp \
 		ip_connection.cpp \
 		brick_imu.cpp \
 		$(SPATH)IbeoLux/src/Capture/CaptureToCSV.cpp \
@@ -38,7 +39,7 @@ TARGET = main
 all: $(TARGET)
 
 $(TARGET): $(OBJECTS)
-	g++ $(CXXFLAGS) $(OBJECTS) $(LFLAGS) $(LIBS) -O3 -o $(TARGET)
+	g++ $(CXXFLAGS) $(OBJECTS) $(LFLAGS) $(LIBS) -O3 -o $(BUILD)/$(TARGET)
 
 clean:
 	rm -f $(OBJECTS) 
