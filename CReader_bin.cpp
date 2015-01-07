@@ -345,10 +345,11 @@ float xAngle, yAngle, zAngle;
 void CReader::storeImuData()
 {
 	float x, y, z, w;
-	float x1 = 0.0, y1 = 0.0, z1 = 0.0, w1 = 0.0;	
+	//float x1 = 0.0, y1 = 0.0, z1 = 0.0, w1 = 0.0;	
 	
-	//imu_get_quaternion(&imu, &x, &y, &z, &w);
+	imu_get_quaternion(&imu, &x, &y, &z, &w);
 	
+	/*
 	// get avg of imu data
 	for (int i = 0 ; i < 5 ; i++) {
 		imu_get_quaternion(&imu, &x, &y, &z, &w);
@@ -362,7 +363,7 @@ void CReader::storeImuData()
 	y = y1 / 5;
 	z = z1 / 5;
 	w = w1 / 5;
-	
+	*/
 	// use octomath to calc quaternion
 	// y, z, x
 	octomath::Quaternion q(w,x,y,z);
@@ -382,12 +383,12 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 {
 	mtx_da.lock();
 	
+	unsigned char *scanPointRaw = NULL;
 	unsigned int scanpoints = dat->getNumberOfScanpoints();
-	unsigned short scannumber = dat->getScannumber();
-	
-	ibeo::IbeoLaserScanpoint *scanPt;
-	
-	thread_clock::time_point start = thread_clock::now();
+	//unsigned short scannumber = dat->getScannumber();
+	short int angleTicksPerRotation = dat->getAngleTicksPerRotation();
+	//ibeo::IbeoLaserScanpoint *scanPt;
+	//thread_clock::time_point start = thread_clock::now();
 	
 	// get IMU data
 	storeImuData();
@@ -396,43 +397,40 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 	logfile.write(reinterpret_cast<const char*>(&xAngle), sizeof(xAngle));
 	logfile.write(reinterpret_cast<const char*>(&yAngle), sizeof(yAngle));
 	logfile.write(reinterpret_cast<const char*>(&zAngle), sizeof(zAngle));
+	logfile.write(reinterpret_cast<const char*>(&angleTicksPerRotation), sizeof(angleTicksPerRotation));
 	
 	//std::cout << "NODE " << xAngle << " " << yAngle << " " << zAngle << std::endl;
-
+	
 	for (unsigned int i = 0; i < scanpoints ; i++) {
-		scanPt = dat->getScanPointAt(i);
-		float xraw = scanPt->getXValue();
-		float yraw = scanPt->getYValue();
-		float zraw = scanPt->getZValue();
-		//unsigned char layer = scanPt->getLayer();
-		//unsigned char flag = scanPt->getScanFlag();
-		//float distance = scanPt->getRadialDistance();
-		//float scanAngle = scanPt->getHorizontalAngle();	
-		//unsigned short intensity = scanPt->getEchoPulseWidth();
-		//unsigned char echo = scanPt->getEcho();
-
-		//logfile.write(reinterpret_cast<const char*>(&layer), sizeof(layer));     //short: 2Bytes float: 4Bytes char: 1Byte
-		//logfile.write(reinterpret_cast<const char*>(&echo), sizeof(echo));
-		//logfile.write(reinterpret_cast<const char*>(&scanAngle), sizeof scanAngle);
-		//logfile.write(reinterpret_cast<const char*>(&distance), sizeof distance);
-		logfile.write(reinterpret_cast<const char*>(&xraw), sizeof xraw);
-		logfile.write(reinterpret_cast<const char*>(&yraw), sizeof yraw);
-		logfile.write(reinterpret_cast<const char*>(&zraw), sizeof zraw);
-		//logfile.write(reinterpret_cast<const char*>(&intensity), sizeof intensity);
-		//logfile.write(reinterpret_cast<const char*>(&flag), sizeof flag);
 		
+		scanPointRaw = dat->getScanPointRawAt(i);
+		
+		logfile.write((const char*)scanPointRaw,8);
+		
+		//scanPt = dat->getScanPointAt(i);
+		//float xraw = scanPt->getXValue();
+		//float yraw = scanPt->getYValue();
+		//float zraw = scanPt->getZValue();
 		//std::cout << xraw << " " << yraw << " " << zraw << std::endl;
+		
+		/*
+		if (i == 128) {
+			logfile.close();
+			mtx_da.unlock();
+			releaseSensor();
+			exit(0);
+		}*/
 	}
 	
 	data_av = 1;
 	
 	// calc delay
-	thread_clock::time_point stop = thread_clock::now();
+	//thread_clock::time_point stop = thread_clock::now();
 
 	//printf("Timestamp: %llu ", timestamp); 
-	printf("| Scanpoints: %d", scanpoints);
-	printf("| Scannumber: %hu", scannumber); 
-	printf("| Time elapsed: %ld ms \n", duration_cast<milliseconds>(stop - start).count());
+	//printf("| Scanpoints: %d", scanpoints);
+	//printf("| Scannumber: %hu", scannumber); 
+	//printf("| Time elapsed: %ld ms \n", duration_cast<milliseconds>(stop - start).count());
 	
 	//releaseSensor();
 	
@@ -507,5 +505,3 @@ int CReader::getRAMLoad(int* total, int* free)
 	fclose(fp);
 	return 1;
 }
-
-
