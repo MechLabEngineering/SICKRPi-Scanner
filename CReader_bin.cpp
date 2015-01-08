@@ -289,23 +289,37 @@ int CReader::init()
 		std::cout << "Keine Verbindung zur IMU!" << std::endl;
 		return false;
 	}
-	
+
 	// set convergence after initial stage
 	imu_set_convergence_speed(&imu,convergence);
 
 	usleep(50000);
 	
-	logfile.open("bin/rawdata.bin", std::ios::out | std::ios::trunc);
+	// raw data file
+	time_t t;
+    struct tm *ts;
+    char buff[128];
+    std::stringstream ss;
+    
+    // build filename 
+    t = time(NULL);
+    ts = localtime(&t);
+    
+    strftime(buff, 80, "rawdata_%Y_%m_%d-%H_%M_%S.bin", ts);
+    
+	ss << bt_path << buff;
+
+	logfile.open(ss.str().c_str(), std::ios::out | std::ios::trunc);
 	logfile.close();
 
-	logfile.open("bin/rawdata.bin", std::ios::app | std::ios::binary | std::ios::out);
-	
+	logfile.open(ss.str().c_str(), std::ios::app | std::ios::binary | std::ios::out);
+
 	// init sensor
 	if(!initSensor()) {
 		std::cout << "Keine Verbindung zum Laserscanner!" << std::endl;
 		return false;
 	}
-	
+
 	imu_leds_on(&imu);
                             
 	return true;
@@ -345,25 +359,9 @@ float xAngle, yAngle, zAngle;
 void CReader::storeImuData()
 {
 	float x, y, z, w;
-	//float x1 = 0.0, y1 = 0.0, z1 = 0.0, w1 = 0.0;	
 	
 	imu_get_quaternion(&imu, &x, &y, &z, &w);
 	
-	/*
-	// get avg of imu data
-	for (int i = 0 ; i < 5 ; i++) {
-		imu_get_quaternion(&imu, &x, &y, &z, &w);
-		x1 += x;
-		y1 += y;
-		z1 += z;
-		w1 += w;
-		usleep(250);
-	}
-	x = x1 / 5;
-	y = y1 / 5;
-	z = z1 / 5;
-	w = w1 / 5;
-	*/
 	// use octomath to calc quaternion
 	// y, z, x
 	octomath::Quaternion q(w,x,y,z);
@@ -385,9 +383,7 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 	
 	unsigned char *scanPointRaw = NULL;
 	unsigned int scanpoints = dat->getNumberOfScanpoints();
-	//unsigned short scannumber = dat->getScannumber();
 	short int angleTicksPerRotation = dat->getAngleTicksPerRotation();
-	//ibeo::IbeoLaserScanpoint *scanPt;
 	//thread_clock::time_point start = thread_clock::now();
 	
 	// get IMU data
@@ -399,27 +395,11 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 	logfile.write(reinterpret_cast<const char*>(&zAngle), sizeof(zAngle));
 	logfile.write(reinterpret_cast<const char*>(&angleTicksPerRotation), sizeof(angleTicksPerRotation));
 	
-	//std::cout << "NODE " << xAngle << " " << yAngle << " " << zAngle << std::endl;
-	
 	for (unsigned int i = 0; i < scanpoints ; i++) {
 		
 		scanPointRaw = dat->getScanPointRawAt(i);
 		
-		logfile.write((const char*)scanPointRaw,8);
-		
-		//scanPt = dat->getScanPointAt(i);
-		//float xraw = scanPt->getXValue();
-		//float yraw = scanPt->getYValue();
-		//float zraw = scanPt->getZValue();
-		//std::cout << xraw << " " << yraw << " " << zraw << std::endl;
-		
-		/*
-		if (i == 128) {
-			logfile.close();
-			mtx_da.unlock();
-			releaseSensor();
-			exit(0);
-		}*/
+		logfile.write((const char*)scanPointRaw,8);		
 	}
 	
 	data_av = 1;
@@ -431,8 +411,6 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 	//printf("| Scanpoints: %d", scanpoints);
 	//printf("| Scannumber: %hu", scannumber); 
 	//printf("| Time elapsed: %ld ms \n", duration_cast<milliseconds>(stop - start).count());
-	
-	//releaseSensor();
 	
 	mtx_da.unlock();
 
