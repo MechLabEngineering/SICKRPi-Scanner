@@ -37,6 +37,7 @@ namespace ibeo
 
 
 //			IbeoLUXData(const IbeoLUXData& copyOf);
+			int writeAllScanPointsToBinFile(std::fstream * fp);
 			short int getAngleTicksPerRotation();
 			unsigned char * getScanPointRawAt(const unsigned int scanpointIndex);
 			IbeoLaserScanpoint * getScanPointAt(const unsigned int scanpointIndex);
