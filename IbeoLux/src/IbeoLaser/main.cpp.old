@@ -1,0 +1,107 @@
+/*
+ * main.cpp
+ *
+ *  Created on: 05.05.2012
+ *      Author: christian
+ */
+#include "Defines.hpp"
+
+#include "IbeoLUX.hpp"
+#include "IbeoLaserData.hpp"
+#include "IbeoLaserException.hpp"
+#include <iostream>
+#include <boost/thread.hpp>
+#include <string>
+#include <sstream>
+#include "CaptureCSV.hpp"
+#include <fstream>
+
+std::string setCommands(int argc, char **argv)
+{
+	if(argc <= 1)
+	{
+		return(std::string(""));
+	}
+
+	int i;
+	for(i = 1; i < argc; i++)
+	{
+		if(strcmp("-o", argv[i]) == 0)
+		{
+			if(i + 1 >= argc)
+			{
+				fprintf(stderr, "Die Option \"-o\" erfordert einen Dateinamen.\r\n\n");
+				return(std::string(""));
+			}
+			else
+			{
+				if(argv[i+1][0] == '-')
+				{
+					fprintf(stderr, "Die Option \"-o\" erfordert einen Dateinamen.\r\n\n");
+					return(std::string(""));
+				}
+				else
+				{
+					return(std::string(argv[i+1]));
+				}
+			}
+		}
+	}
+	return(std::string(""));
+}
+
+void printUsage()
+{
+#ifdef __linux
+	printf("***  ibeoLaser  ***\t\t v0.3Linux\n");
+	printf("---------------------------------------------------------------------------------------------------------------\n");
+	printf("Programm starten: ./ibeoLaser\n\n");
+#endif
+#ifdef _WIN32
+	printf("***  ibeoLaser  ***\t\t v0.3Windows\n");
+	printf("---------------------------------------------------------------------------------------------------------------\n");
+	printf("Programm starten: ibeoLaser.exe\n\n");
+#endif
+	printf("Optionen:         -o     <Datei inkl. Pfad>   Scanpunkte in Textdatei schreiben\n\n\r");
+}
+
+int main(int argc, char **argv)
+{
+	std::string filename;
+
+	if((filename = setCommands(argc, argv)) == "")
+	{
+		printUsage();
+		exit(2);
+	}
+
+
+	capture::CaptureCSV captureFile(filename, "|", 100000);
+	ibeo::ibeoLUX::IbeoLUX ibeoLUX("192.168.0.1", 12002, 1);
+
+	try
+	{
+		ibeoLUX.startCapturingInFile(&captureFile);
+		ibeoLUX.connect();
+		ibeoLUX.startCapturing();
+	}
+	catch(ibeo::IbeoLaserConnectionOpenException&)
+	{
+		std::cout << "Es konnte keine Verbindung zum IbeoLUX hergestellt werden." << std::endl;
+		ibeoLUX.disconnect();
+		exit(1);
+	}
+
+	std::string userCommand;
+
+	while(userCommand != "e")
+	{
+		std::cout << "Das Programm beendet sich, wenn Sie ein \"e\" eingeben und ENTER druecken." << std::endl;
+		std::cin >> userCommand;
+	}
+
+	ibeoLUX.disconnect();
+	captureFile.flush();
+
+	return(0);
+}
