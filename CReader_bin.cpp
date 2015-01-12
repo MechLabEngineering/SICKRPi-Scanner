@@ -73,26 +73,26 @@ CReader::CReader()
 {
 	scancycles = 0;
 	is_imu_connected = false;
-	
+
 	ip_adress = "192.168.0.1";
 	port = 12002;
 	convergence = 0;
-	
+
 	// set angle filter
 	angle_max = 0*PI/180; // scanner max 50
 	angle_min = -60*PI/180; // scanner min -60
-	
+
 	maxmin = false;
 	duration = false;
 	writebt = false;
 	writecsv = false;
 	is_indoor = false;
-	
+
 	if (readConfig())
 		debugMessage(2,"config successfully readed!");
 	else
 		debugMessage(2, "no config file!");
-	
+
 	return;
 }
 
@@ -103,24 +103,24 @@ int CReader::readConfig()
 	std::string line;
 	size_t pos = 0;
 	std::string key, val;
-	
+
 	fh.open(CONFIG, std::ios::in);
-	
+
 	if (!fh.is_open()) {
 		fh.open("config.cfg", std::ios::in);
 		if (!fh.is_open()) {
 			return FALSE;
-		}	
+		}
 	}
-		
+
 	debugMessage(2, "read config...");
-		
+
 	while (getline(fh,line)) {			
 		pos = line.find("=");
 		key = trim(line.substr(0,pos));
 		val = trim(line.substr(pos+1));
-		
-		try {				
+
+		try {
 			if (key.compare("ip") == 0) {
 				ip_adress = val;
 			} else if (key.compare("port") == 0) {
@@ -167,8 +167,8 @@ CReader::~CReader()
 	mtx_da.lock();
 	releaseSensor();
 	mtx_da.unlock();
-	
-	usleep(200);
+
+	usleep(2000);
 
 	// turn off imu leds
 	imu_leds_off(&imu);
@@ -217,20 +217,20 @@ void cb_enumerate(const char *uid, const char *connected_uid,
     
     // check if device is an imu
     if(device_identifier == IMU_DEVICE_IDENTIFIER) {
-		
+
 		std::cout << "Found IMU with UID:" << uid << std::endl;
-		
+
 		if (is_imu_connected) {
 			std::cout << "Es ist bereits eine IMU verbunden!" << std::endl;
 			return;
 		}
-		
+
 		imu_create(&imu, uid, &ipcon);
-		
+
 		imu_set_convergence_speed(&imu,60);
-		
+
 		if (!is_indoor) {
-			
+
 			imu_set_angular_velocity_period(&imu, 10);	
 
 			imu_register_callback(&imu,
@@ -238,7 +238,7 @@ void cb_enumerate(const char *uid, const char *connected_uid,
 								(void *)cb_angular_velocity,
 								NULL);
 		}
-		
+
 		imu_leds_off(&imu);
 		is_imu_connected = true;
 	}
@@ -252,11 +252,11 @@ int CReader::init()
 	bb_x_min = 0.0;
 	bb_y_max = 200.0;
 	bb_y_min = -200.0;
-	
+
 	// activate both filter
 	filter_angle = true;
 	filter_bbox = true;
-	
+
 	// init tinkerforge ------------------------------------------------	
 	// create IP connection
 
@@ -283,7 +283,7 @@ int CReader::init()
 	ipcon_enumerate(&ipcon);
 	// sleep
 	usleep(7000000);
-	
+
 	// check if imu is connected
 	if (!is_imu_connected) {
 		std::cout << "Keine Verbindung zur IMU!" << std::endl;
@@ -294,7 +294,7 @@ int CReader::init()
 	imu_set_convergence_speed(&imu,convergence);
 
 	usleep(50000);
-	
+
 	// raw data file
 	time_t t;
     struct tm *ts;
@@ -359,9 +359,9 @@ float xAngle, yAngle, zAngle;
 void CReader::storeImuData()
 {
 	float x, y, z, w;
-	
+
 	imu_get_quaternion(&imu, &x, &y, &z, &w);
-	
+
 	// use octomath to calc quaternion
 	// y, z, x
 	octomath::Quaternion q(w,x,y,z);
@@ -380,30 +380,23 @@ float xmax  = 0.0, xmin  = 0.0, ymax  = 0.0, ymin = 0.0, zmax = 0.0, zmin = 0.0;
 void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 {
 	mtx_da.lock();
-	
-	unsigned char *scanPointRaw = NULL;
 	unsigned int scanpoints = dat->getNumberOfScanpoints();
 	short int angleTicksPerRotation = dat->getAngleTicksPerRotation();
 	//thread_clock::time_point start = thread_clock::now();
-	
+
 	// get IMU data
 	storeImuData();
-	
+
 	logfile.write(reinterpret_cast<const char*>(&scanpoints), sizeof(scanpoints));
 	logfile.write(reinterpret_cast<const char*>(&xAngle), sizeof(xAngle));
 	logfile.write(reinterpret_cast<const char*>(&yAngle), sizeof(yAngle));
 	logfile.write(reinterpret_cast<const char*>(&zAngle), sizeof(zAngle));
 	logfile.write(reinterpret_cast<const char*>(&angleTicksPerRotation), sizeof(angleTicksPerRotation));
-	
-	for (unsigned int i = 0; i < scanpoints ; i++) {
-		
-		scanPointRaw = dat->getScanPointRawAt(i);
-		
-		logfile.write((const char*)scanPointRaw,8);		
-	}
-	
+
+	dat->writeAllScanPointsToBinFile(&logfile);
+
 	data_av = 1;
-	
+
 	// calc delay
 	//thread_clock::time_point stop = thread_clock::now();
 
@@ -411,7 +404,7 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 	//printf("| Scanpoints: %d", scanpoints);
 	//printf("| Scannumber: %hu", scannumber); 
 	//printf("| Time elapsed: %ld ms \n", duration_cast<milliseconds>(stop - start).count());
-	
+
 	mtx_da.unlock();
 
 	return;
@@ -420,14 +413,11 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 // get octomap data for lds server
 int CReader::getOctomap(std::stringstream& buff)
 {
-
 	return 0;
-	
 }
 
 int CReader::writeDataBT()
 {
-	
 	return 0;
 }
 
@@ -435,7 +425,7 @@ void CReader::releaseSensor()
 {
 	// stop laserscanner
 	laserscanner->stopMeasuring();
-	usleep(1000);
+	usleep(50000);
 	laserscanner->releaseInstance();
 
 	return;

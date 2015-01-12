@@ -99,6 +99,15 @@ namespace ibeo
 			return angleTicksPerRotation;
 		}
 		
+		int IbeoLUXData::writeAllScanPointsToBinFile(std::fstream * fp)
+		{
+			unsigned char* dataPointer = this->scandataPointer;
+
+			fp->write((const char*)dataPointer,scanPointSize *numberOfScanPoints);
+
+			return 0;
+		}
+		
 		unsigned char * IbeoLUXData::getScanPointRawAt(const unsigned int scanpointIndex)
 		{
 			if(scanpointIndex >= this->numberOfScanPoints)
@@ -106,14 +115,10 @@ namespace ibeo
 
 			unsigned char* dataPointer = this->scandataPointer; // +44
 
-			// auskommentiert, da sowieso nur SCANDATA abgelegt werden im Speicher
-			//if(this->dataType != SCANDATA) return(0);
-
 			// den Pointer soweit versetzen, dass es dem angeforderten Index entspricht
 			dataPointer += scanPointSize * scanpointIndex;
 
 			// Rohdaten einlesen
-			//memcpy(scanPointRaw, &angleTicksPerRotation,2);
 			memcpy(scanPointRaw, dataPointer, 8);
 			
 			return scanPointRaw;
@@ -152,6 +157,7 @@ namespace ibeo
 
 			// Horizontalwinkel einlesen
 			memcpy(&(horizontalAngleTicks), dataPointer + 2, 2);
+
 			horizontalAngle = ((2.0 * boost::math::constants::pi<float>() * static_cast<float>(horizontalAngleTicks)) / static_cast<float>(angleTicksPerRotation)); // laut Doku Ethernet
 
 			// Entfernung Laser/Messpunkt einlesen

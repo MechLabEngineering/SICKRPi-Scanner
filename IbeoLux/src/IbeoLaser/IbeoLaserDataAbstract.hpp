@@ -40,6 +40,7 @@ namespace ibeo
 		friend class capture::CaptureToCSV;
 
 		virtual ~IbeoLaserDataAbstract();
+		virtual int writeAllScanPointsToBinFile(std::fstream * fp) = 0;
 		virtual short int getAngleTicksPerRotation() = 0;
 		virtual unsigned char * getScanPointRawAt(const unsigned int scanpointIndex) = 0;
 		virtual IbeoLaserScanpoint* getScanPointAt(unsigned int scanpointIndex) = 0; ///< liefert bei abgeleiteten Klassen einen Scanpunkt zurück
