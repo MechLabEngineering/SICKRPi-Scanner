@@ -23,9 +23,9 @@ int main (int argv, char ** argc)
 	int ret = 0;
 	int run = 1;
 	char str[100];
-	stringstream buff(ios::in|ios::out);
+	char buff[2048];
 	struct sockaddr_un local, remote;
-	
+
 	try {
 		if (!reader->init()) {
 			exit(1);
@@ -98,12 +98,13 @@ int main (int argv, char ** argc)
 				//str[8] = '\0';
 				
 				ret = reader->getOctomap(buff);
-				if (ret == 0)
-					buff << "NO_DATA";
-					
-				//cout << "RESPONSE:" << buff.str().c_str() << endl;
-				//cout << buff.str() << endl;
-				if (send(s2, buff.str().c_str(), strlen(buff.str().c_str()), 0) < 0) {
+				if (ret == 0) {
+					strncpy(buff,"NO_DATA",8);
+					buff[8] = '\n';
+					//buff << "NO_DATA";
+				}
+
+				if (send(s2, buff, ret, 0) < 0) {
 					perror("send");
 					done = 1;
 				}
