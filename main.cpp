@@ -13,34 +13,39 @@
 
 #define SOCK_PATH "octomap"
 
+#define BUFF_SIZE 100
+#define UDS_SIZE 2048
+
 using namespace std;
 
 int main (int argv, char ** argc)
 {
-	//cout << "Hier";
 	CReader *reader = new CReader();
 	int s, s2, t, len;
 	int ret = 0;
 	int run = 1;
-	char str[100];
-	char buff[2048];
+	char str[BUFF_SIZE];
+	char buff[UDS_SIZE];
 	struct sockaddr_un local, remote;
 
 	try {
 		if (!reader->init()) {
+			if (reader != NULL)
+				delete reader;
 			exit(1);
 		}
 	}
 	catch (...) {
 		cout << "Error!" << endl;
 	}
-	
+
 	// UDS -------------------------------------------------------------
 	//start server
 
 	if ((s = socket(AF_UNIX, SOCK_STREAM, 0)) == -1 ) {
 		perror("socket");
-		exit(1);
+		run = false;
+		//exit(1);
 	}
 
 	local.sun_family = AF_UNIX;
@@ -50,12 +55,14 @@ int main (int argv, char ** argc)
 
 	if (bind(s, (struct sockaddr *)&local, len) == -1) {
 		perror("bind");
-		exit(1);
+		run = false;
+		//exit(1);
 	}
 
 	if (listen(s, 5) == -1) {
 		perror("listen");
-		exit(1);
+		run = false;
+		//exit(1);
 	}
 
 	while (run) {
@@ -73,7 +80,7 @@ int main (int argv, char ** argc)
 
 		do {
 			// receive data from client
-			n = recv(s2, str, 100, 0);
+			n = recv(s2, str, BUFF_SIZE, 0);
 			str[n] = '\0';
 			cout << str << endl;
 			if (n <= 0) {
@@ -114,8 +121,6 @@ int main (int argv, char ** argc)
 
 		close(s2);
 	}
-
-	
 
 	if (reader != NULL)
 		delete reader;
