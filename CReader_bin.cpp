@@ -38,6 +38,7 @@ using namespace boost::chrono;
 std::fstream logfile;
 
 boost::mutex mtx_da;
+std::stringstream ss;
 
 int data_av = 0;
 bool is_imu_connected;
@@ -150,12 +151,12 @@ int CReader::readConfig()
 			} else if (key.compare("maxangle") == 0) {
 				angle_max = atoi(val.c_str())*PI/180.0;
 			}
-		
+
 		} catch (...) {
 			std::cout << "unkown parameter:" << key << std::endl;
 		}
-	}	
-	
+	}
+
 	fh.close();
    
 	return TRUE;
@@ -168,7 +169,14 @@ CReader::~CReader()
 	releaseSensor();
 	mtx_da.unlock();
 
-	usleep(2000);
+	usleep(200);
+
+	int ret = 0;
+	std::cout << ss.str() << std::endl;
+	ret = execl("/bin/cp", "cp", ss.str().c_str(), "/media/usb0/", NULL);
+	std::cout << ret << std::endl;
+	ret = execl("/bin/rm", "rm", ss.str().c_str(), NULL);
+	std::cout << ret << std::endl;
 
 	// turn off imu leds
 	imu_leds_off(&imu);
@@ -299,7 +307,6 @@ int CReader::init()
 	time_t t;
     struct tm *ts;
     char buff[128];
-    std::stringstream ss;
     
     // build filename 
     t = time(NULL);
@@ -307,7 +314,7 @@ int CReader::init()
     
     strftime(buff, 80, "rawdata_%Y_%m_%d-%H_%M_%S.bin", ts);
     
-	ss << bt_path << buff;
+	ss << "scans/" << buff;
 
 	logfile.open(ss.str().c_str(), std::ios::out | std::ios::trunc);
 	logfile.close();
