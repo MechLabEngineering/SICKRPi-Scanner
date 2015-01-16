@@ -1,7 +1,7 @@
 /*
  * CReader.cpp
  * save laser data to binary file
- * 
+ *
  * Created on: 22.12.2014
  * Author: Markus
 */
@@ -12,6 +12,7 @@
 #include <fstream>
 #include <stdint.h>
 #include <unistd.h>
+#include <sys/types.h>
 #include <math.h>
 #include <list>
 
@@ -116,7 +117,7 @@ int CReader::readConfig()
 
 	debugMessage(2, "read config...");
 
-	while (getline(fh,line)) {			
+	while (getline(fh,line)) {
 		pos = line.find("=");
 		key = trim(line.substr(0,pos));
 		val = trim(line.substr(pos+1));
@@ -135,7 +136,7 @@ int CReader::readConfig()
 				if (val.compare("true") == 0)
 					writebt = true;
 			} else if (key.compare("btpath") == 0) {
-				bt_path = val;				
+				bt_path = val;
 			} else if (key.compare("convergence") == 0) {
 				convergence = atoi(val.c_str());
 			} else if (key.compare("location") == 0) {
@@ -158,7 +159,7 @@ int CReader::readConfig()
 	}
 
 	fh.close();
-   
+
 	return TRUE;
 }
 
@@ -171,13 +172,23 @@ CReader::~CReader()
 
 	usleep(200);
 
-	int ret = 0;
-	std::cout << ss.str() << std::endl;
-	ret = execl("/bin/cp", "cp", ss.str().c_str(), "/media/usb0/", NULL);
-	std::cout << ret << std::endl;
-	ret = execl("/bin/rm", "rm", ss.str().c_str(), NULL);
-	std::cout << ret << std::endl;
+	logfile.close();
 
+	std::stringstream path;
+
+	path << "/home/pi/SICKRPi-Scanner/" << ss.str();
+
+	pid_t pid;
+
+	if((pid = fork()) < 0) {
+		fprintf(stderr, "Fehler... %s\n", strerror(errno));
+	}
+	else if(pid == 0) {
+		/* Kindprozess */
+		execl("/usr/bin/sudo", "cp", "/bin/cp", path.str().c_str(), "/media/usb0/", NULL);
+	}
+	else {
+		/* Elternprozess */
 	// turn off imu leds
 	imu_leds_off(&imu);
 
@@ -186,11 +197,13 @@ CReader::~CReader()
 	imu_set_angular_velocity_period(&imu, 0);
 	imu_destroy(&imu);
 	ipcon_destroy(&ipcon); // Calls ipcon_disconnect internally
+	}
+	//ret = execl("/usr/bin/sudo", "rm", "/bin/rm", path.str().c_str(), NULL);
 }
 
 // TINKERFORGE
 
-void cb_connected(uint8_t connect_reason, void *user_data) 
+void cb_connected(uint8_t connect_reason, void *user_data)
 {
     // ...then trigger enumerate
     ipcon_enumerate(&ipcon);
@@ -204,7 +217,7 @@ void cb_angular_velocity(int16_t x, int16_t y, int16_t z, void *user_data)
 	if (abs(x) > 3 || abs(y) || abs(z)) {
 		imu_set_convergence_speed(&imu, 30);
 	} else {
-		imu_set_convergence_speed(&imu, 0);	
+		imu_set_convergence_speed(&imu, 0);
 	}
 }
 
@@ -213,7 +226,7 @@ void cb_angular_velocity(int16_t x, int16_t y, int16_t z, void *user_data)
 void cb_enumerate(const char *uid, const char *connected_uid,
                   char position, uint8_t hardware_version[3],
                   uint8_t firmware_version[3], uint16_t device_identifier,
-                  uint8_t enumeration_type, void *user_data) 
+                  uint8_t enumeration_type, void *user_data)
 {
     int is_indoor = *(int*)user_data;
 
@@ -222,7 +235,7 @@ void cb_enumerate(const char *uid, const char *connected_uid,
         printf("\n");
         return;
     }
-    
+
     // check if device is an imu
     if(device_identifier == IMU_DEVICE_IDENTIFIER) {
 
@@ -239,7 +252,7 @@ void cb_enumerate(const char *uid, const char *connected_uid,
 
 		if (!is_indoor) {
 
-			imu_set_angular_velocity_period(&imu, 10);	
+			imu_set_angular_velocity_period(&imu, 10);
 
 			imu_register_callback(&imu,
 								IMU_CALLBACK_ANGULAR_VELOCITY,
@@ -265,7 +278,7 @@ int CReader::init()
 	filter_angle = true;
 	filter_bbox = true;
 
-	// init tinkerforge ------------------------------------------------	
+	// init tinkerforge ------------------------------------------------
 	// create IP connection
 
     ipcon_create(&ipcon);
@@ -275,7 +288,7 @@ int CReader::init()
 		std::cout << "Could not connect to brickd!" << std::endl;
         return false;
     }
-    
+
 	// Register connected callback to "cb_connected"
     ipcon_register_callback(&ipcon,
                             IPCON_CALLBACK_CONNECTED,
@@ -307,13 +320,13 @@ int CReader::init()
 	time_t t;
     struct tm *ts;
     char buff[128];
-    
-    // build filename 
+
+    // build filename
     t = time(NULL);
     ts = localtime(&t);
-    
+
     strftime(buff, 80, "rawdata_%Y_%m_%d-%H_%M_%S.bin", ts);
-    
+
 	ss << "scans/" << buff;
 
 	logfile.open(ss.str().c_str(), std::ios::out | std::ios::trunc);
@@ -328,7 +341,7 @@ int CReader::init()
 	}
 
 	imu_leds_on(&imu);
-                            
+
 	return true;
 }
 
@@ -339,7 +352,7 @@ int CReader::initSensor()
 		std::cout << "Sensor searching..." << std::endl;
 
 		laserscanner = ibeo::ibeoLUX::IbeoLUX::getInstance();
-		
+
 		try {
 			laserscanner->connect();
 			laserscanner->startMeasuring();
@@ -407,9 +420,9 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 	// calc delay
 	//thread_clock::time_point stop = thread_clock::now();
 
-	//printf("Timestamp: %llu ", timestamp); 
+	//printf("Timestamp: %llu ", timestamp);
 	//printf("| Scanpoints: %d", scanpoints);
-	//printf("| Scannumber: %hu", scannumber); 
+	//printf("| Scannumber: %hu", scannumber);
 	//printf("| Time elapsed: %ld ms \n", duration_cast<milliseconds>(stop - start).count());
 
 	mtx_da.unlock();
@@ -418,7 +431,7 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 }
 
 // get octomap data for lds server
-int CReader::getOctomap(std::stringstream& buff)
+int CReader::getOctomap(char* buff)
 {
 	return 0;
 }
