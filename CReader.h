@@ -95,7 +95,8 @@ class CReader
 		void octoWorker();
 		float getSpeed();
 		int getPosition(float *x, float *y, float *z);
-		int transformCoord(float x1, float y1, float z1, int *x2, int *y2, int *z2);
+		int transformCoord(point3d spt, int *x, int *y, int *z);
+		int updateMapSegment();
 };
 
 #endif
