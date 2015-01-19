@@ -35,7 +35,7 @@ class CReader
 		CReader();
 		~CReader();
 		int init();
-		int getOctomap(std::stringstream& buff);
+		int getOctomap(char *buff);
 		int writeDataBT();
 		//char* printState() { return "ok"; }
 	private:
@@ -67,6 +67,10 @@ class CReader
 		float filter_angle;
 		float filter_bbox;
 		
+		float xAngle;
+		float yAngle;
+		float zAngle;
+		
 	// config parameter
 	private:
 		int maxmin;
@@ -82,12 +86,16 @@ class CReader
 		int readConfig();
 		int getCPULoad();
 		int getRAMLoad(int* total, int* free);
-		int writeLaserData(BOOL new_scan, ibeo::IbeoLaserScanpoint * scanPt);
+		int writeLaserData(BOOL new_scan, pose6d * scanpoint); // deprecated
+		int writeTreePlain(BOOL new_scan, pose6d * scanpoint);
 		void writeToCSV(ibeo::IbeoLaserScanpoint *scanPt);
 		void releaseSensor();
 		void storeImuData();
 		void newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat);
 		void octoWorker();
+		float getSpeed();
+		int getPosition(float *x, float *y, float *z);
+		int transformCoord(float x1, float y1, float z1, int *x2, int *y2, int *z2);
 };
 
 #endif
