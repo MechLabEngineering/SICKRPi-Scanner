@@ -184,8 +184,8 @@ CReader::~CReader()
 		fprintf(stderr, "Fehler... %s\n", strerror(errno));
 	}
 	else if(pid == 0) {
-		/* Kindprozess */
-		execl("/usr/bin/sudo", "cp", "/bin/cp", path.str().c_str(), "/media/usb0/", NULL);
+		/* Kindprozess */ "/media/usb0/"
+		execl("/usr/bin/sudo", "cp", "/bin/cp", path.str().c_str(), bt_path.c_str(), NULL);
 	}
 	else {
 		/* Elternprozess */
