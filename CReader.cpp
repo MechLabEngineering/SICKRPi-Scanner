@@ -26,7 +26,6 @@
 
 using namespace boost::chrono;
 
-//
 #define OCTO_RES 	0.05 // in m
 #define PI 3.14159265
 
@@ -45,7 +44,8 @@ boost::mutex mtx_da;
 
 thread_clock::time_point cb_start;
 
-std::stringstream point_stream(std::ios::in|std::ios::out);
+//std::stringstream point_stream(std::ios::in|std::ios::out);
+std::stringstream tmpstr;
 
 std::fstream file;
 
@@ -90,6 +90,7 @@ CReader::CReader()
 {
 	tree = NULL;
 	pcloud = NULL;
+	laserscanner = NULL;
 	scancycles = 0;
 	is_imu_connected = false;
 	is_imu_adjustment = false;
@@ -100,6 +101,8 @@ CReader::CReader()
 	layers = 1;
 	convergence = 0;
 
+	curr_segment = 0;
+	max_work_height = 2; // m
 	// set angle filter
 	// TODO: config the scanner 
 	angle_max = 0*PI/180; // scanner max 50
@@ -116,6 +119,28 @@ CReader::CReader()
 		debugMessage(2,"config successfully readed!");
 	else
 		debugMessage(2, "no config file!");
+
+	// create map segments
+	debugMessage(1, "init map segments!");
+	for (int i = 0 ; i < MAP_SEGS_NUM ; i++) {
+		MapSegment m;
+		initMapSegment(&m);
+		map.push_back(&m);
+	}
+
+	/*
+	MapSegment *n ;
+	for (int j = 0 ; j < MAP_SEGS_NUM ; j++) {
+		n = map.front();
+		map.pop_front();
+		for (int x = 0 ; x < MAP_ROWS ; x++) {
+			for (int y = 0 ; y < MAP_COLS ; y++) {
+				std::cout << (*n).segment[x][y] << "::";
+			}
+			std::cout << std::endl;
+		}
+		std::cout << std::endl;
+	}*/
 
 	return;
 }
@@ -179,30 +204,41 @@ int CReader::readConfig()
 				angle_max = atoi(val.c_str())*PI/180.0;
 			}
 		} catch (...) {
-			std::cout << "unkown parameter:" << key << std::endl;
+			tmpstr << "unknown parameter:" << key;
+			debugMessage(4, tmpstr.str());
 		}
 	}
 	fh.close();
 	return TRUE;
+
 }
 
 CReader::~CReader()
 {
 	// release sensor
-	releaseSensor();
+	if (laserscanner != NULL)
+		releaseSensor();
 
 	if (file.is_open())
 		file.close();
 
 	usleep(200);
 
-	// turn off imu leds
-	imu_leds_off(&imu);
+	if (tree != NULL) {
+		// clean up
+		tree->clear();
+		tree = NULL;
+	}
 
-	// release ipcon
-	imu_set_quaternion_period(&imu, 0);
-	imu_set_angular_velocity_period(&imu, 0);
-	imu_destroy(&imu);
+	if (is_imu_connected) {
+		// turn off imu leds
+		imu_leds_off(&imu);
+
+		// release ipcon
+		imu_set_quaternion_period(&imu, 0);
+		imu_set_angular_velocity_period(&imu, 0);
+		imu_destroy(&imu);
+	}
 	ipcon_destroy(&ipcon); // calls ipcon_disconnect internally
 }
 
@@ -211,8 +247,8 @@ CReader::~CReader()
 ######################################################################*/
 void cb_connected(uint8_t connect_reason, void *user_data) 
 {
-    // ...then trigger enumerate
-    if (is_imu_connected == false)
+	// ...then trigger enumerate
+	if (is_imu_connected == false)
 		ipcon_enumerate(&ipcon);
 	return;
 }
@@ -238,28 +274,26 @@ void cb_angular_velocity(int16_t x, int16_t y, int16_t z, void *user_data)
 	return;
 }
 
-
 // print incoming enumeration information
 void cb_enumerate(const char *uid, const char *connected_uid,
                   char position, uint8_t hardware_version[3],
                   uint8_t firmware_version[3], uint16_t device_identifier,
                   uint8_t enumeration_type, void *user_data)
 {
-    int is_indoor = *(int*)user_data;
+	int is_indoor = *(int*)user_data;
 
+	if(enumeration_type == IPCON_ENUMERATION_TYPE_DISCONNECTED) {
+		printf("\n");
+		return;
+	}
 
-    if(enumeration_type == IPCON_ENUMERATION_TYPE_DISCONNECTED) {
-        printf("\n");
-        return;
-    }
-
-    // check if device is an imu
-    if(device_identifier == IMU_DEVICE_IDENTIFIER) {
-
-		std::cout << "Found IMU with UID:" << uid << std::endl;
+	// check if device is an imu
+	if(device_identifier == IMU_DEVICE_IDENTIFIER) {
+		tmpstr << "found IMU with UID:" << uid;
+		debugMessage(2, tmpstr.str());
 
 		if (is_imu_connected) {
-			std::cout << "Es ist bereits eine IMU verbunden!" << std::endl;
+			debugMessage(2, "IMU already connected!");
 			return;
 		}
 
@@ -300,41 +334,32 @@ int CReader::init()
 	// init tinkerforge ------------------------------------------------
 	// create IP connection
 
-    ipcon_create(&ipcon);
+	ipcon_create(&ipcon);
 
-    // connect to brickd
-    if(ipcon_connect(&ipcon, HOST, PORT) < 0) {
-		std::cout << "Could not connect to brickd!" << std::endl;
-        return false;
-    }
+	// connect to brickd
+	if(ipcon_connect(&ipcon, HOST, PORT) < 0) {
+		debugMessage(4, "could not connect to brickd!");
+		return false;
+	}
 
 	// register connected callback to "cb_connected"
-    ipcon_register_callback(&ipcon,
-                            IPCON_CALLBACK_CONNECTED,
-                            (void *)cb_connected,
-                            &ipcon);
+	ipcon_register_callback(&ipcon,
+							IPCON_CALLBACK_CONNECTED,
+							(void *)cb_connected,
+							&ipcon);
 
-    // register enumeration callback to "cb_enumerate"
-    ipcon_register_callback(&ipcon,
-                            IPCON_CALLBACK_ENUMERATE,
-                            (void*)cb_enumerate,
-                            &is_indoor);
-/*
-	usleep(2000000);
-
-	// register angular velocity callback to "cb_angular_velocity"
-	ipcon_register_callback(&ipcon, 
-							IMU_CALLBACK_ANGULAR_VELOCITY,
-							(void*)cb_angular_velocity,
-							NULL);
-	imu_set_angular_velocity_period(&imu,100);*/
+	// register enumeration callback to "cb_enumerate"
+	ipcon_register_callback(&ipcon,
+							IPCON_CALLBACK_ENUMERATE,
+							(void*)cb_enumerate,
+							&is_indoor);
 
 	// sleep
 	usleep(5000000);
 
 	// check if imu is connected
 	if (!is_imu_connected) {
-		std::cout << "Keine Verbindung zur IMU!" << std::endl;
+		debugMessage(4,"no IMU connected!");
 		return false;
 	}
 
@@ -345,13 +370,13 @@ int CReader::init()
 
 	// init sensor
 	if(!initSensor()) {
-		std::cout << "Keine Verbindung zum Laserscanner!" << std::endl;
+		debugMessage(4, "couldn't connect to laserscanner!");
 		return false;
 	}
 
 	imu_leds_on(&imu);
 
-    cb_start = thread_clock::now();
+	cb_start = thread_clock::now();
 
 	return true;
 }
@@ -360,21 +385,20 @@ int CReader::initSensor()
 {
 	if (!ibeo::ibeoLUX::IbeoLUX::getInstance()) {
 		ibeo::ibeoLUX::IbeoLUX::initInstance(this->ip_adress, this->port, 1);
-		std::cout << "Sensor searching..." << std::endl;
-
+		debugMessage(4, "laserscanner searching...!");
 		laserscanner = ibeo::ibeoLUX::IbeoLUX::getInstance();
 
 		try {
 			laserscanner->connect();
 			laserscanner->startMeasuring();
 		} catch (...) {
-			std::cout << "Sensor not found" << std::endl;
+			debugMessage(4, "laserscanner not found!");
 			return false;
 		}
 	}
 
 	if (laserscanner->getConnectionStatus()) {
-		std::cout << "Sensor connected" << std::endl;
+		debugMessage(4, "laserscanner connected!");
 	} else {
 		return false;
 	}
@@ -446,23 +470,48 @@ int CReader::transformCoord(point3d spt, int *x, int *y, int *z)
 	return true;
 }
 
-int initMapSegment(int map[][MAP_SIZE_Y])
+/*######################################################################
+## add a new map segment and delete the oldest one
+######################################################################*/
+int CReader::addNewMapSegment()
 {
-	for (int x = 0 ; x < MAP_SIZE_X ; x++) {
-		for (int y = 0 ; y < MAP_SIZE_Y ; y++) {
-			map[x][y] = 0;
+	// check if container is empty
+	if (!map.empty())
+		map.pop_back();
+
+	// init an inster new map segment
+	MapSegment n;
+	initMapSegment(&n);
+	map.push_front(&n);
+
+	return 0;
+}
+
+/*######################################################################
+## init a complete map segment (free occupancy)
+######################################################################*/
+int CReader::initMapSegment(MapSegment *map)
+{
+	for (int x = 0 ; x < MAP_ROWS ; x++) {
+		for (int y = 0 ; y < MAP_COLS ; y++) {
+			(*map).segment[x][y] = OCCUPANCY_FREE;
 		}
 	}
 	return 0;
 }
 
+/*######################################################################
+## update map segment
+######################################################################*/
 int CReader::updateMapSegment()
 {
 	int x, y, z;
 	float value;
 	// check which map segment
+	if (map.empty())
+		return false;
 
-	// filter scanpoints
+	MapSegment *mseg = map.front();
 
 	// transform coords
 	for(OcTree::leaf_iterator it = tree->begin_leafs(), end = tree->end_leafs(); it!= end; ++it) { // access node, e.g.:
@@ -472,26 +521,24 @@ int CReader::updateMapSegment()
 
 		transformCoord(p, &x, &y, &z);
 
-	}
-	// update map
-
-	for (int x = 0 ; x < MAP_SIZE_X ; x++) {
-		for (int y = 0 ; y < MAP_SIZE_Y ; y++) {
-			;//map[x][y] = 0;
+		// update map segment
+		if (x >= 0 && x < MAP_ROWS && y >= 0 && y < MAP_COLS) {
+			// check if cube higher than max work height
+			if (z <= max_work_height && value > 1.0) {
+				(*mseg).segment[x][y] = OCCUPANCY_OCCUPIED;
+			}
 		}
 	}
-
-	return 0;
+	return true;
 }
 
-//float xAngle, yAngle, zAngle;
 void CReader::storeImuData()
 {
 	float x, y, z, w;
 	float x1 = 0.0, y1 = 0.0, z1 = 0.0, w1 = 0.0;
 
 	//imu_get_quaternion(&imu, &x, &y, &z, &w);
-
+	
 	// get avg of imu data
 	for (int i = 0 ; i < 5 ; i++) {
 		imu_get_quaternion(&imu, &x, &y, &z, &w);
@@ -505,7 +552,7 @@ void CReader::storeImuData()
 	y = y1 / 5;
 	z = z1 / 5;
 	w = w1 / 5;
-
+	
 	// use octomath to calc quaternion
 	// y, z, x
 	octomath::Quaternion q(w,x,y,z);
@@ -594,9 +641,6 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 	// count scan cycles
 	scancycles++;
 
-	// clear point stream string
-	//point_stream.str(std::string());
-
 	// get IMU data
 	storeImuData();
 
@@ -615,9 +659,6 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 		sp_count++;
 
 		scanPt = dat->getScanPointAt(i);
-
-		//point_stream.setf(std::ios::fixed);
-		//point_stream << std::setprecision(2) << (float)scanPt->getXValue() << ";" << (float)scanPt->getYValue() << ";"  << (float)scanPt->getZValue() << "#";
 
 		x = (float)scanPt->getXValue();
 		y = (float)scanPt->getYValue();
@@ -724,11 +765,11 @@ int CReader::writeDataBT()
     if (!writebt)
 		return 0;
 
-    // build filename 
-    t = time(NULL);
-    ts = localtime(&t);
+	// build filename 
+	t = time(NULL);
+	ts = localtime(&t);
 
-    strftime(buff, 80, "tree_%Y_%m_%d-%H_%M_%S.bt", ts);
+	strftime(buff, 80, "tree_%Y_%m_%d-%H_%M_%S.bt", ts);
 
 	tree->updateInnerOccupancy();
 
@@ -761,11 +802,11 @@ int CReader::writeTreePlain(BOOL new_scan, pose6d * scanpoint)
 	char buff[128];
 	std::stringstream ss;
 
-    // build filename 
-    t = time(NULL);
-    ts = localtime(&t);
+	// build filename 
+	t = time(NULL);
+	ts = localtime(&t);
 
-    strftime(buff, 80, "scan_%Y_%m_%d-%H_%M_%S.log", ts);
+	strftime(buff, 80, "scan_%Y_%m_%d-%H_%M_%S.log", ts);
 
 	ss << SCAN_TXT << buff;
 
@@ -791,10 +832,6 @@ void CReader::releaseSensor()
 	// write octree binary
 	if (writebt)
 		writeDataBT();
-
-	// clean up
-	tree->clear();
-	tree = NULL;
 
 	return;
 }
