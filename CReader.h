@@ -20,14 +20,25 @@
 #define TRUE	1
 #define BOOL	int
 
+#define MAP_SEGS_NUM 4
+#define MAP_ROWS 2
+#define MAP_COLS 2
+
+#define OCCUPANCY_OCCUPIED 1
+#define OCCUPANCY_FREE 0 
+
 namespace ibeo{
 	class IbeoLaserAbstract;
 	class IbeoLaserDataAbstract;
 	namespace ibeoLUX  {class IbeoLUX;}
- }
+}
 
 using std::string;
 using namespace octomap;
+
+typedef struct {
+	int segment[MAP_ROWS][MAP_COLS];
+} MapSegment;
 
 class CReader
 {
@@ -43,8 +54,11 @@ class CReader
 		unsigned short port;
 		float octo_res;
 		int layers;
+		int curr_segment;
+		int max_work_height;
 		ibeo::IbeoLaserAbstract *laserscanner;
 		boost::thread *tworker;
+		std::list <MapSegment*> map;
 
 		int64_t scancycles;
 		int state;
@@ -97,6 +111,8 @@ class CReader
 		int getPosition(float *x, float *y, float *z);
 		int transformCoord(point3d spt, int *x, int *y, int *z);
 		int updateMapSegment();
+		int initMapSegment(MapSegment *map);
+		int addNewMapSegment();
 };
 
 #endif
