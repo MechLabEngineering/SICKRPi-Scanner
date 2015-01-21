@@ -30,6 +30,7 @@ int main (int argv, char ** argc)
 
 	try {
 		if (!reader->init()) {
+			cout << "abort program!" << endl;
 			if (reader != NULL)
 				delete reader;
 			exit(1);
