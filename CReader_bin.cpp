@@ -184,8 +184,9 @@ CReader::~CReader()
 		fprintf(stderr, "Fehler... %s\n", strerror(errno));
 	}
 	else if(pid == 0) {
-		/* Kindprozess */ "/media/usb0/"
-		execl("/usr/bin/sudo", "cp", "/bin/cp", path.str().c_str(), bt_path.c_str(), NULL);
+		/* Kindprozess  "/media/usb0/" */
+		//execl("/usr/bin/sudo", "cp", "/bin/cp", path.str().c_str(), bt_path.c_str(), NULL);
+		execl("/usr/bin/sudo", "sh", "/bin/sh", "/home/pi/SICKRPi-Scanner/tools/cpy_bin.sh", path.str().c_str(), bt_path.c_str(), NULL);
 	}
 	else {
 		/* Elternprozess */
