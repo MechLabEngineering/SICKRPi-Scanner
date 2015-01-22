@@ -37,6 +37,7 @@ using namespace boost::chrono;
 #define DEBUG 1
 
 std::fstream logfile;
+std::stringstream tmpstr;
 
 boost::mutex mtx_da;
 std::stringstream ss;
@@ -154,7 +155,8 @@ int CReader::readConfig()
 			}
 
 		} catch (...) {
-			std::cout << "unkown parameter:" << key << std::endl;
+			tmpstr << "unknown parameter:" << key;
+			debugMessage(4, tmpstr.str());
 		}
 	}
 
@@ -166,9 +168,11 @@ int CReader::readConfig()
 CReader::~CReader()
 {
 	// release sensor
-	mtx_da.lock();
-	releaseSensor();
-	mtx_da.unlock();
+	if (laserscanner != NULL) {
+		mtx_da.lock();
+		releaseSensor();
+		mtx_da.unlock();
+	}
 
 	usleep(200);
 
@@ -190,13 +194,15 @@ CReader::~CReader()
 	}
 	else {
 		/* Elternprozess */
-	// turn off imu leds
-	imu_leds_off(&imu);
+	if (is_imu_connected) {
+		// turn off imu leds
+		imu_leds_off(&imu);
 
-	// release ipcon
-	imu_set_quaternion_period(&imu, 0);
-	imu_set_angular_velocity_period(&imu, 0);
-	imu_destroy(&imu);
+		// release ipcon
+		imu_set_quaternion_period(&imu, 0);
+		imu_set_angular_velocity_period(&imu, 0);
+		imu_destroy(&imu);
+	}
 	ipcon_destroy(&ipcon); // Calls ipcon_disconnect internally
 	}
 	//ret = execl("/usr/bin/sudo", "rm", "/bin/rm", path.str().c_str(), NULL);
@@ -206,12 +212,10 @@ CReader::~CReader()
 
 void cb_connected(uint8_t connect_reason, void *user_data)
 {
-    // ...then trigger enumerate
-    ipcon_enumerate(&ipcon);
+	// ...then trigger enumerate
+	if (is_imu_connected == false)
+		ipcon_enumerate(&ipcon);
 }
-
-int imu_cb = 0;
-double yaw = 0, pitch = 0, roll = 0;
 
 void cb_angular_velocity(int16_t x, int16_t y, int16_t z, void *user_data)
 {
@@ -231,7 +235,6 @@ void cb_enumerate(const char *uid, const char *connected_uid,
 {
     int is_indoor = *(int*)user_data;
 
-
     if(enumeration_type == IPCON_ENUMERATION_TYPE_DISCONNECTED) {
         printf("\n");
         return;
@@ -239,11 +242,11 @@ void cb_enumerate(const char *uid, const char *connected_uid,
 
     // check if device is an imu
     if(device_identifier == IMU_DEVICE_IDENTIFIER) {
-
-		std::cout << "Found IMU with UID:" << uid << std::endl;
+		tmpstr << "found IMU with UID:" << uid;
+		debugMessage(2, tmpstr.str());
 
 		if (is_imu_connected) {
-			std::cout << "Es ist bereits eine IMU verbunden!" << std::endl;
+			debugMessage(2, "IMU already connected!");
 			return;
 		}
 
@@ -282,13 +285,13 @@ int CReader::init()
 	// init tinkerforge ------------------------------------------------
 	// create IP connection
 
-    ipcon_create(&ipcon);
+	ipcon_create(&ipcon);
 
-    // Connect to brickd
-    if(ipcon_connect(&ipcon, HOST, PORT) < 0) {
-		std::cout << "Could not connect to brickd!" << std::endl;
-        return false;
-    }
+	// Connect to brickd
+	if(ipcon_connect(&ipcon, HOST, PORT) < 0) {
+		debugMessage(4, "could not connect to brickd!");
+		return false;
+	}
 
 	// Register connected callback to "cb_connected"
     ipcon_register_callback(&ipcon,
@@ -308,7 +311,7 @@ int CReader::init()
 
 	// check if imu is connected
 	if (!is_imu_connected) {
-		std::cout << "Keine Verbindung zur IMU!" << std::endl;
+		debugMessage(4,"no IMU connected!");
 		return false;
 	}
 
@@ -319,14 +322,14 @@ int CReader::init()
 
 	// raw data file
 	time_t t;
-    struct tm *ts;
-    char buff[128];
+	struct tm *ts;
+	char buff[128];
 
-    // build filename
-    t = time(NULL);
-    ts = localtime(&t);
+	// build filename
+	t = time(NULL);
+	ts = localtime(&t);
 
-    strftime(buff, 80, "rawdata_%Y_%m_%d-%H_%M_%S.bin", ts);
+	strftime(buff, 80, "rawdata_%Y_%m_%d-%H_%M_%S.bin", ts);
 
 	ss << "scans/" << buff;
 
@@ -337,7 +340,7 @@ int CReader::init()
 
 	// init sensor
 	if(!initSensor()) {
-		std::cout << "Keine Verbindung zum Laserscanner!" << std::endl;
+		debugMessage(4, "couldn't connect to laserscanner!");
 		return false;
 	}
 
@@ -350,7 +353,7 @@ int CReader::initSensor()
 {
 	if (!ibeo::ibeoLUX::IbeoLUX::getInstance()) {
 		ibeo::ibeoLUX::IbeoLUX::initInstance(this->ip_adress, this->port, 1);
-		std::cout << "Sensor searching..." << std::endl;
+		debugMessage(4, "laserscanner searching...!");
 
 		laserscanner = ibeo::ibeoLUX::IbeoLUX::getInstance();
 
@@ -358,13 +361,13 @@ int CReader::initSensor()
 			laserscanner->connect();
 			laserscanner->startMeasuring();
 		} catch (...) {
-			std::cout << "Sensor not found" << std::endl;
+			debugMessage(4, "laserscanner not found!");
 			return false;
 		}
 	}
 
 	if (laserscanner->getConnectionStatus()) {
-		std::cout << "Sensor connected" << std::endl;
+		debugMessage(4, "laserscanner connected!");
 	} else {
 		return false;
 	}
@@ -396,8 +399,6 @@ void CReader::storeImuData()
 	return;
 }
 
-float xmax  = 0.0, xmin  = 0.0, ymax  = 0.0, ymin = 0.0, zmax = 0.0, zmin = 0.0;
-
 void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 {
 	mtx_da.lock();
@@ -420,14 +421,9 @@ void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 
 	// calc delay
 	//thread_clock::time_point stop = thread_clock::now();
-
-	//printf("Timestamp: %llu ", timestamp);
-	//printf("| Scanpoints: %d", scanpoints);
-	//printf("| Scannumber: %hu", scannumber);
 	//printf("| Time elapsed: %ld ms \n", duration_cast<milliseconds>(stop - start).count());
 
 	mtx_da.unlock();
-
 	return;
 }
 
@@ -444,11 +440,12 @@ int CReader::writeDataBT()
 
 void CReader::releaseSensor()
 {
+	mtx_da.lock();
 	// stop laserscanner
 	laserscanner->stopMeasuring();
 	usleep(50000);
 	laserscanner->releaseInstance();
-
+	mtx_da.unlock();
 	return;
 }
 
