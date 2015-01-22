@@ -80,6 +80,7 @@ CReader::CReader()
 	ip_adress = "192.168.0.1";
 	port = 12002;
 	convergence = 0;
+	laserscanner = NULL;
 
 	// set angle filter
 	angle_max = 0*PI/180; // scanner max 50
@@ -168,19 +169,18 @@ int CReader::readConfig()
 CReader::~CReader()
 {
 	// release sensor
-	if (laserscanner != NULL) {
-		mtx_da.lock();
+	//if (laserscanner != NULL) {
+	//	mtx_da.lock();
 		releaseSensor();
-		mtx_da.unlock();
-	}
-
+	//	mtx_da.unlock();
+	//}
 	usleep(200);
 
 	logfile.close();
 
-	std::stringstream path;
+	//std::stringstream path;
 
-	path << "/home/pi/SICKRPi-Scanner/" << ss.str();
+	//path << "/home/pi/SICKRPi-Scanner/" << ss.str();
 
 	pid_t pid;
 
@@ -188,22 +188,22 @@ CReader::~CReader()
 		fprintf(stderr, "Fehler... %s\n", strerror(errno));
 	}
 	else if(pid == 0) {
-		/* Kindprozess  "/media/usb0/" */
+		//Kindprozess  "/media/usb0/"
 		//execl("/usr/bin/sudo", "cp", "/bin/cp", path.str().c_str(), bt_path.c_str(), NULL);
-		execl("/usr/bin/sudo", "sh", "/bin/sh", "/home/pi/SICKRPi-Scanner/tools/cpy_bin.sh", path.str().c_str(), bt_path.c_str(), NULL);
+		execl("/usr/bin/sudo", "sh", "/bin/sh", "/home/pi/SICKRPi-Scanner/tools/cpy_bin.sh", ss.str().c_str(), bt_path.c_str(), NULL);
 	}
 	else {
-		/* Elternprozess */
-	if (is_imu_connected) {
-		// turn off imu leds
-		imu_leds_off(&imu);
+		// Elternprozess
+		if (is_imu_connected) {
+			// turn off imu leds
+			imu_leds_off(&imu);
 
-		// release ipcon
-		imu_set_quaternion_period(&imu, 0);
-		imu_set_angular_velocity_period(&imu, 0);
-		imu_destroy(&imu);
-	}
-	ipcon_destroy(&ipcon); // Calls ipcon_disconnect internally
+			// release ipcon
+			imu_set_quaternion_period(&imu, 0);
+			imu_set_angular_velocity_period(&imu, 0);
+			imu_destroy(&imu);
+		}
+		ipcon_destroy(&ipcon); // Calls ipcon_disconnect internally
 	}
 	//ret = execl("/usr/bin/sudo", "rm", "/bin/rm", path.str().c_str(), NULL);
 }
@@ -331,7 +331,7 @@ int CReader::init()
 
 	strftime(buff, 80, "rawdata_%Y_%m_%d-%H_%M_%S.bin", ts);
 
-	ss << "scans/" << buff;
+	ss << "/home/pi/SICKRPi-Scanner/scans/" << buff;
 
 	logfile.open(ss.str().c_str(), std::ios::out | std::ios::trunc);
 	logfile.close();
@@ -440,12 +440,10 @@ int CReader::writeDataBT()
 
 void CReader::releaseSensor()
 {
-	mtx_da.lock();
 	// stop laserscanner
 	laserscanner->stopMeasuring();
 	usleep(50000);
 	laserscanner->releaseInstance();
-	mtx_da.unlock();
 	return;
 }
 
