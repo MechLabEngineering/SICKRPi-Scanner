@@ -43,6 +43,7 @@ boost::mutex mtx_da;
 std::stringstream ss;
 
 int data_av = 0;
+bool is_cb_angular = false;
 bool is_imu_connected;
 
 using std::string;
@@ -219,11 +220,25 @@ void cb_connected(uint8_t connect_reason, void *user_data)
 
 void cb_angular_velocity(int16_t x, int16_t y, int16_t z, void *user_data)
 {
-	if (abs(x) > 3 || abs(y) || abs(z)) {
-		imu_set_convergence_speed(&imu, 30);
-	} else {
+	mtx_da.lock();
+	is_cb_angular = true;
+	//std::cout << y << std::endl;
+	if (abs(x) > 50 || abs(y) > 50 || abs(z) > 50) {
+		//std::cout << "adjust" << std::endl;
+		//is_imu_adjustment = true;
+		imu_set_convergence_speed(&imu, 300);
+		usleep(1000000);
 		imu_set_convergence_speed(&imu, 0);
+		//is_imu_adjustment = false;
+		//std::cout << "adjust finished" << std::endl;
+	} else {
+		//std::cout << "b" << std::endl;
+		imu_set_convergence_speed(&imu, 0);
+		//is_imu_adjustment = false;
 	}
+	is_cb_angular = false;
+	mtx_da.unlock();
+	return;
 }
 
 
@@ -401,6 +416,9 @@ void CReader::storeImuData()
 
 void CReader::newLaserData(ibeo::ibeoLaserDataAbstractSmartPtr dat)
 {
+	if (is_cb_angular)
+		return;
+
 	mtx_da.lock();
 	unsigned int scanpoints = dat->getNumberOfScanpoints();
 	short int angleTicksPerRotation = dat->getAngleTicksPerRotation();
