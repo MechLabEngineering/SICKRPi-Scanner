@@ -32,6 +32,9 @@
 # Temp files
 *~
 
+# IDE files
+nbproject/
+
 # Octomap files
 /*.bt
 *.csv
