@@ -33,6 +33,7 @@ using namespace boost::chrono;
 #define CONFIG "/media/usb0/config.cfg"
 #define HOST "localhost"
 #define PORT 4223
+#define CB_AV_PERIOD 10
 
 #define DEBUG 1
 
@@ -271,7 +272,7 @@ void cb_enumerate(const char *uid, const char *connected_uid,
 
 		if (!is_indoor) {
 
-			imu_set_angular_velocity_period(&imu, 10);
+			imu_set_angular_velocity_period(&imu, CB_AV_PERIOD);
 
 			imu_register_callback(&imu,
 								IMU_CALLBACK_ANGULAR_VELOCITY,
@@ -408,8 +409,11 @@ void CReader::storeImuData()
 	octomath::Pose6D pp(v, q);
 
 	xAngle = pp.roll();
-	yAngle = pp.pitch();
-	zAngle = pp.yaw()*-1; // invert to correct mirroring
+	yAngle = pp.yaw();
+	zAngle = pp.pitch();
+	//xAngle = pp.roll();
+	//yAngle = pp.pitch();
+	//zAngle = pp.yaw()*-1; // invert to correct mirroring
 
 	return;
 }
